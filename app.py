@@ -4,9 +4,8 @@ from db import init_db
 
 # Import controllers
 from controllers.user_controller import user_bp
-from controllers.monthly_sales_stats_controller import monthly_stats_bp
-from controllers.monthly_sales_stats_predicted_controller import monthly_stats_predicted_bp
 from controllers.line_chart_main_controller import sales_chart_bp
+from controllers.product_controller import product_bp
 
 
 def create_app():
@@ -16,8 +15,9 @@ def create_app():
 
     # Register blueprints
     app.register_blueprint(user_bp)
-    app.register_blueprint(monthly_stats_bp)
-    app.register_blueprint(monthly_stats_predicted_bp)
+    #app.register_blueprint(monthly_stats_bp)
+    #app.register_blueprint(monthly_stats_predicted_bp)
     app.register_blueprint(sales_chart_bp)
+    app.register_blueprint(product_bp)
 
     return app

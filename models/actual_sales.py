@@ -81,7 +81,7 @@ ORDER BY p.product_id
                     "product_id": row["product_id"],
                     "product_name": row["product_name"],
                     "actual_sale_2022": float(row["actual_sale_2022"] or 0),
-                    "predicted_sale_2023": float(row["predicted_sale_2023"] or 0)
+                    "predicted_sale_2023": round(float(row["predicted_sale_2023"] or 0), 2)
                 }
                 for row in results
             ]

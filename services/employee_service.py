@@ -24,13 +24,16 @@ def get_all_employees():
 
 def add_employee(data):
     try:
+        parent_id_value = data.get('parent_id')
+        if parent_id_value == '':
+            parent_id_value = None
         hashed_password = generate_password_hash(data['password'])
 
         new_employee = Employee(
             name=data['name'],
             email=data['email'],
             mob_no=data['mob_no'],
-            parent_id=data['parent_id'],
+            parent_id=parent_id_value,
             department_id=data['department_id'],
             password=hashed_password
         )
@@ -42,3 +45,9 @@ def add_employee(data):
     except SQLAlchemyError as e:
         db.session.rollback()
         return False, str(e)
+    
+def authenticate(email, password):
+    employee = Employee.query.filter_by(email=email).first()
+    if employee and employee.check_password(password):
+        return employee
+    return None

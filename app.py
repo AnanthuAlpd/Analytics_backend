@@ -22,7 +22,7 @@ def create_app():
     CORS(app, origins=['http://localhost:4200'])
     init_db(app)
 
-    app.config['JWT_SECRET_KEY'] = 'your_secret_key'  # keep this secret!
+    app.config['JWT_SECRET_KEY'] = 'ananthu'  # keep this secret!
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=15)
     app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 

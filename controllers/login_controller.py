@@ -15,10 +15,13 @@ def login():
     employee = Employee.query.filter_by(email=email).first()
     if employee and employee.check_password(password):
         access_token = create_access_token(
-            identity=str(employee.id),  # identity must be string
-            additional_claims={"type": "EMPLOYEE"}
+            identity=str(employee.id), 
+            additional_claims={"user_type": "EMPLOYEE"}
         )
-        refresh_token = create_refresh_token(identity=str(employee.id))
+        refresh_token = create_refresh_token(
+            identity=str(employee.id),
+            #additional_claims={"user_type": "EMPLOYEE"} 
+        )
         return jsonify({
             "access_token": access_token,
             "user_type": "EMPLOYEE",
@@ -34,10 +37,13 @@ def login():
     client = Client.query.filter_by(email=email).first()
     if client and client.check_password(password):
         access_token = create_access_token(
-            identity=str(client.client_id),  # identity must be string
-            additional_claims={"type": "CLIENT"}
+            identity=str(client.client_id), 
+            additional_claims={"user_type": "CLIENT"}
         )
-        refresh_token = create_refresh_token(identity=str(client.client_id))
+        refresh_token = create_refresh_token(
+            identity=str(client.client_id),
+            #additional_claims={"user_type": "CLIENT"}  # ✅ add type claim
+        )
         return jsonify({
             "access_token": access_token,
             "user_type": "CLIENT",
@@ -55,18 +61,22 @@ def login():
 
 @jwt_required(refresh=True)
 def refresh():
-    identity = get_jwt_identity()  # This is the user ID as string
-    claims = get_jwt()             # This gives you the full token payload
-    user_type = claims.get("type")  # Either "CLIENT" or "EMPLOYEE"
+    identity = get_jwt_identity()  # this is employee.id or client.client_id
+    claims = get_jwt()
 
-    if user_type not in {"CLIENT", "EMPLOYEE"}:
-        return jsonify({"msg": "Invalid user type in token"}), 400
+    # Fetch user_type from DB instead
+    user_type = "UNKNOWN"
+    if Employee.query.get(identity):
+        user_type = "EMPLOYEE"
+    elif Client.query.get(identity):
+        user_type = "CLIENT"
 
     new_token = create_access_token(
         identity=identity,
-        additional_claims={"type": user_type}
+        additional_claims={"user_type": user_type}
     )
 
     return jsonify(access_token=new_token), 200
+
 
 

@@ -2,12 +2,12 @@ from models.pr_monthly_sales import MonthlySales
 from models.pr_product_master import Product
 from models.clients import Client
 from db import db
-from sqlalchemy import func
+from sqlalchemy import func,extract
 from datetime import date
 
-def get_april_summary(client_id):
-    start = date(2025, 4, 1)
-    end = date(2025, 4, 30)
+def get_kpi_summary(client_id):
+    start = date(2024, 1, 1)
+    end = date(2024, 12, 30)
 
     # Total revenue for this client
     total_value = db.session.query(
@@ -59,8 +59,8 @@ def get_april_summary(client_id):
     }
 
 def get_top_10_selling_products(client_id):
-    start = date(2025, 4, 1)
-    end = date(2025, 4, 30)
+    start = date(2024, 1, 1)
+    end = date(2024, 12, 30)
 
     results = db.session.query(
         Product.name,
@@ -83,8 +83,8 @@ def get_top_10_selling_products(client_id):
     return chart_data
 
 def get_top_10_revenue_products(client_id):
-    start = date(2025, 4, 1)
-    end = date(2025, 4, 30)
+    start = date(2024, 1, 1)
+    end = date(2024, 1, 30)
 
     results = db.session.query(
         Product.name,
@@ -107,8 +107,8 @@ def get_top_10_revenue_products(client_id):
     return chart_data
 
 def get_least_selling_products(client_id,limit=10):
-    start = date(2025, 4, 1)
-    end = date(2025, 4, 30)
+    start = date(2024, 1, 1)
+    end = date(2024, 12, 30)
 
     results = db.session.query(
         Product.product_id,
@@ -136,8 +136,8 @@ def get_least_selling_products(client_id,limit=10):
 
 
 def get_unsold_products(client_id):
-    start = date(2025, 4, 1)
-    end = date(2025, 4, 30)
+    start = date(2024, 1, 1)
+    end = date(2024, 12, 30)
 
     # Subquery: sum of qty_sold per product for April
     subq = db.session.query(
@@ -172,8 +172,8 @@ def get_unsold_products(client_id):
     return unsold_list
 
 def get_low_performance_products(client_id,threshold=10, limit=10):
-    start = date(2025, 4, 1)
-    end = date(2025, 4, 30)
+    start = date(2024, 1, 1)
+    end = date(2024, 12, 30)
 
     results = db.session.query(
         Product.name,
@@ -212,4 +212,50 @@ def get_top_valued_products(client_id,limit=10):
         "rate": float(row.unit_cost)
     } for row in results]
 
+def get_monthly_sales_trend(client_id, product_id):
+    start = date(2024, 1, 1)
+    end = date(2024, 12, 31)
 
+    query = db.session.query(
+        extract('month', MonthlySales.report_date).label('month'),
+        func.sum(MonthlySales.qty_sold).label('total_units'),
+        func.sum(Product.unit_cost * MonthlySales.qty_sold).label('total_revenue')
+    ).join(Product, Product.product_id == MonthlySales.product_id)\
+     .filter(MonthlySales.client_id == client_id)\
+     .filter(MonthlySales.report_date.between(start, end))
+
+    if product_id:
+        query = query.filter(MonthlySales.product_id == product_id)
+
+    query = query.group_by(extract('month', MonthlySales.report_date))\
+                 .order_by(extract('month', MonthlySales.report_date))
+
+    results = query.all()
+
+    month_map = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+                 7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
+
+    monthly_revenue = []
+    monthly_units = []
+
+    for row in results:
+        month_name = month_map.get(int(row.month), f'Month {int(row.month)}')
+        monthly_revenue.append({
+            "name": month_name,
+            "value": float(round(row.total_revenue or 0, 2))
+        })
+        monthly_units.append({
+            "name": month_name,
+            "value": int(row.total_units or 0)
+        })
+
+    return {
+        "monthly_revenue": [{
+            "name": "Revenue",
+            "series": monthly_revenue
+        }],
+        "monthly_units": [{
+            "name": "Units Sold",
+            "series": monthly_units
+        }]
+    }

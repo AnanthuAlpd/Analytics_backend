@@ -24,6 +24,15 @@ class Employee(db.Model):
         return check_password_hash(self.password, raw_password)
 
     def to_dict(self):
+        other_departments = [
+            {
+                'id': ed.department.id,
+                'name': ed.department.name
+            }
+            for ed in self.employee_departments
+            if ed.department_id != self.department_id  # exclude main department
+        ]
+
         return {
             'id': self.id,
             'name': self.name,
@@ -31,6 +40,6 @@ class Employee(db.Model):
             'mob_no': self.mob_no,
             'parent_id': self.parent_id,
             'department_id': self.department_id,
-            'department_name': self.department.name if self.department else None
-            # ❗️ Don't include the password
+            'main_department': self.department.name if self.department else None,
+            'other_departments': other_departments
         }

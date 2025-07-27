@@ -1,6 +1,7 @@
 # services/employee_service.py
 from werkzeug.security import generate_password_hash
 from models.employee import Employee
+from models.employee_departments import EmployeeDepartments
 from db import db
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -41,6 +42,12 @@ def add_employee(data):
         db.session.add(new_employee)
         db.session.commit()
 
+        department_link = EmployeeDepartments(
+            employee_id=new_employee.id,
+            department_id=data['department_id']
+        )
+        db.session.add(department_link)
+        db.session.commit()
         return True, new_employee.to_dict()
     except SQLAlchemyError as e:
         db.session.rollback()

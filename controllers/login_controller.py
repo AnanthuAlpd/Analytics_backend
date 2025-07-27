@@ -22,14 +22,11 @@ def login():
             identity=str(employee.id),
             #additional_claims={"user_type": "EMPLOYEE"} 
         )
+
         return jsonify({
             "access_token": access_token,
             "user_type": "EMPLOYEE",
-            "employee": {
-                "id": employee.id,
-                "name": employee.name,
-                "email": employee.email
-            },
+            "employee": employee.to_dict(),
             "refresh_token": refresh_token
         }), 200
 
@@ -44,13 +41,15 @@ def login():
             identity=str(client.client_id),
             #additional_claims={"user_type": "CLIENT"}  # ✅ add type claim
         )
+        service_name = client.service.name
         return jsonify({
             "access_token": access_token,
             "user_type": "CLIENT",
             "client": {
                 "id": client.client_id,
                 "name": client.name,
-                "email": client.email
+                "email": client.email,
+                "service_name":service_name
             },
             "refresh_token": refresh_token
         }), 200
@@ -58,7 +57,6 @@ def login():
     return jsonify({"message": "Invalid email or password"}), 401
 
 @login_bp.route('/refresh', methods=['POST'])
-
 @jwt_required(refresh=True)
 def refresh():
     identity = get_jwt_identity()  # this is employee.id or client.client_id

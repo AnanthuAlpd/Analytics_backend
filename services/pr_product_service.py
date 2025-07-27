@@ -18,3 +18,4 @@ def get_client_products(client_id, search_term=None):
         ))
 
     return query.order_by(Product.name).limit(50).all()
+

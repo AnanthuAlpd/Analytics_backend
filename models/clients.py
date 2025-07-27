@@ -14,14 +14,15 @@ class Client(db.Model):
     password = db.Column(db.String(255), nullable=False)
     phone = db.Column(db.String(15))
     ref_emp_id = db.Column(db.Integer)  # FK to employees.id (optional)
-    service_id = db.Column(db.Integer)
+    service_id = db.Column(db.Integer, db.ForeignKey('services.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(
         db.DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow
     )
-    
+    service = db.relationship('Service', backref='clients')
+
     def set_password(self, raw_password):
         self.password = generate_password_hash(raw_password)
 
@@ -36,6 +37,7 @@ class Client(db.Model):
             "phone": self.phone,
             "ref_emp_id": self.ref_emp_id,
             "service_id":self.service_id,
+            "service_name": self.service.name,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }

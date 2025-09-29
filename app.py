@@ -11,12 +11,12 @@ from controllers.line_chart_main_controller import sales_chart_bp
 from controllers.product_controller import product_bp
 from controllers.api_root_controller import api_root_bp
 from controllers.emp_controller import employee_bp
-from controllers.department_controller import department_bp
 from controllers.services_controller import service_bp
 from controllers.pr_monthly_sales_controller import pr_sales_dashboard
 from controllers.client_controller import clients_bp
 from controllers.login_controller import login_bp
 from controllers.leads_controller import leads_bp
+from controllers.super_admin_controller import super_admin_bp
 def create_app():
     app = Flask(__name__)
     #CORS(app, supports_credentials=True)
@@ -37,10 +37,10 @@ def create_app():
     app.register_blueprint(sales_chart_bp, url_prefix='/api')
     app.register_blueprint(product_bp, url_prefix='/api')
     app.register_blueprint(employee_bp, url_prefix='/api')
-    app.register_blueprint(department_bp, url_prefix='/api')
     app.register_blueprint(service_bp, url_prefix='/api')
     app.register_blueprint(pr_sales_dashboard, url_prefix='/api')
     app.register_blueprint(clients_bp, url_prefix='/api')
     app.register_blueprint(login_bp, url_prefix='/api')
     app.register_blueprint(leads_bp, url_prefix='/api')
+    app.register_blueprint(super_admin_bp, url_prefix='/api')
     return app

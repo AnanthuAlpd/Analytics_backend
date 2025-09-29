@@ -1,60 +1,32 @@
 from flask import request, jsonify,Blueprint
 from models.employee import Employee
 from models.clients import Client
+from sqlalchemy import union_all, literal
 from flask_jwt_extended import create_access_token, create_refresh_token,jwt_required,get_jwt_identity,get_jwt
+from db import db
+from services.auth_service import AuthService
+from services.menu_service import MenuService
 
 login_bp = Blueprint('login', __name__)
 
 @login_bp.route('/login_new', methods=['POST'])
 def login():
-    data = request.get_json()
-    email = data.get('email', '').strip()
-    password = data.get('password', '').strip()
+    try:
+        data = request.get_json()
+        if not data:
+            return AuthService.create_response(message="Invalid JSON", status="error", code=400)
 
-    # Try employee
-    employee = Employee.query.filter_by(email=email).first()
-    if employee and employee.check_password(password):
-        access_token = create_access_token(
-            identity=str(employee.id), 
-            additional_claims={"user_type": "EMPLOYEE"}
-        )
-        refresh_token = create_refresh_token(
-            identity=str(employee.id),
-            #additional_claims={"user_type": "EMPLOYEE"} 
-        )
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
 
-        return jsonify({
-            "access_token": access_token,
-            "user_type": "EMPLOYEE",
-            "employee": employee.to_dict(),
-            "refresh_token": refresh_token
-        }), 200
+        if not email or not password:
+            return AuthService.create_response(message="Email and password are required", status="error", code=400)
 
-    # Try client
-    client = Client.query.filter_by(email=email).first()
-    if client and client.check_password(password):
-        access_token = create_access_token(
-            identity=str(client.client_id), 
-            additional_claims={"user_type": "CLIENT"}
-        )
-        refresh_token = create_refresh_token(
-            identity=str(client.client_id),
-            #additional_claims={"user_type": "CLIENT"}  # ✅ add type claim
-        )
-        service_name = client.service.name
-        return jsonify({
-            "access_token": access_token,
-            "user_type": "CLIENT",
-            "client": {
-                "id": client.client_id,
-                "name": client.name,
-                "email": client.email,
-                "service_name":service_name
-            },
-            "refresh_token": refresh_token
-        }), 200
+        return AuthService.login_user(email, password)
 
-    return jsonify({"message": "Invalid email or password"}), 401
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        return AuthService.create_response(message="Login failed. Please try again.", status="error", code=500)
 
 @login_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
@@ -75,6 +47,18 @@ def refresh():
     )
 
     return jsonify(access_token=new_token), 200
+
+@login_bp.route('/get-menus', methods=['GET'])
+def menus_with_roles():
+    menus = MenuService.get_all_menus_with_roles()
+    return jsonify(menus)
+
+@login_bp.route('/get-menus-by-ids', methods=['POST'])
+def get_menus_with_roles():
+    data = request.get_json()
+    role_ids = data.get("role_ids", [])
+    menus = MenuService.get_menus_by_roles(role_ids)
+    return jsonify(menus)
 
 
 

@@ -98,3 +98,25 @@ def get_leads_dashboard_stats(emp_id=None):
     except Exception as e:
         db.session.rollback()
         return {"error": str(e)}, 500
+
+def get_all_leads_service():
+    try:
+        leads = Lead.query.all()
+        lead_list = [
+            {
+                "id": lead.id,
+                "emp_id": lead.emp_id,
+                "name": lead.name,
+                "lead_cat": lead.lead_cat,
+                "email": lead.email,
+                "mob_no": lead.mob_no,
+                "lead_source": lead.lead_source,
+                "status": lead.status,
+                "remarks": lead.remarks,
+                "created_at": lead.created_at
+            }
+            for lead in leads
+        ]
+        return lead_list
+    except Exception as e:
+        raise Exception(str(e))

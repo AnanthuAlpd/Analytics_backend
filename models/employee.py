@@ -1,7 +1,5 @@
-# models/employee.py
 from db import db
 from werkzeug.security import generate_password_hash, check_password_hash
-from models.department import Department 
 
 class Employee(db.Model):
     __tablename__ = 'employees'
@@ -15,7 +13,16 @@ class Employee(db.Model):
     parent_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.current_timestamp())
 
+    # Relationships
     department = db.relationship("Department", back_populates="employees")
+
+    
+    roles = db.relationship(
+        'Role',
+        secondary='employee_roles',
+        lazy='select',
+        backref=db.backref('employees', lazy='select')
+    )
 
     def set_password(self, raw_password):
         self.password = generate_password_hash(raw_password)
@@ -29,8 +36,8 @@ class Employee(db.Model):
                 'id': ed.department.id,
                 'name': ed.department.name
             }
-            for ed in self.employee_departments
-            if ed.department_id != self.department_id  # exclude main department
+            for ed in getattr(self, 'employee_departments', [])
+            if ed.department_id != self.department_id
         ]
 
         return {
@@ -41,5 +48,10 @@ class Employee(db.Model):
             'parent_id': self.parent_id,
             'department_id': self.department_id,
             'main_department': self.department.name if self.department else None,
-            'other_departments': other_departments
+            'other_departments': other_departments,
+            'roles': [{'id': role.id, 'name': role.name} for role in self.roles]
         }
+
+# Import at the end to avoid circular imports
+from models.employee_roles import EmployeeRole
+from models.roles import Role

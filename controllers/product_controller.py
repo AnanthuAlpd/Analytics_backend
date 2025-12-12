@@ -9,7 +9,7 @@ product_bp = Blueprint('product', __name__)
 def get_products():
     try:
         cur = mysql.connection.cursor()
-        cur.execute("SELECT product_id, product_name, category, price, description FROM product ORDER BY product_id;")
+        cur.execute("SELECT product_id, product_name, category, sale_price, description FROM product ORDER BY product_id;")
         products = cur.fetchall()
         cur.close()
         return jsonify({'status': 'success', 'data': products})

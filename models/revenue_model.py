@@ -7,7 +7,7 @@ class Revenue:
 
         query = f"""
             SELECT DATE_FORMAT(s.report_date, '%%b') AS month,
-            SUM(p.price * s.{qty_column}) AS revenue
+            SUM(p.sale_price * s.{qty_column}) AS revenue
             FROM {table_name} s
             JOIN product p ON p.product_id = s.product_id
             WHERE s.report_date BETWEEN %s AND %s

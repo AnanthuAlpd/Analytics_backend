@@ -65,9 +65,9 @@ class PredictedSales:
         query = f"""
             SELECT 
             b.product_name,
-            b.price,
+            b.sale_price,
             a.forecasted_quantity,
-            round(b.price * a.forecasted_quantity) AS total_forecasted_value
+            round(b.sale_price * a.forecasted_quantity) AS total_forecasted_value
             FROM 
             monthly_sales_stats_predicted a
             JOIN 
@@ -86,7 +86,7 @@ class PredictedSales:
 
         query = f"""
             SELECT 
-            ROUND(SUM(b.price * a.forecasted_quantity)) AS total_forecasted_value
+            ROUND(SUM(b.sale_price * a.forecasted_quantity)) AS total_forecasted_value
             FROM 
             monthly_sales_stats_predicted a
             JOIN 

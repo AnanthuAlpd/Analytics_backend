@@ -17,6 +17,7 @@ from controllers.client_controller import clients_bp
 from controllers.login_controller import login_bp
 from controllers.leads_controller import leads_bp
 from controllers.super_admin_controller import super_admin_bp
+from controllers.demo_dashboard_controller import demo_dashboard_bp
 def create_app():
     app = Flask(__name__)
     #CORS(app, supports_credentials=True)
@@ -43,4 +44,5 @@ def create_app():
     app.register_blueprint(login_bp, url_prefix='/api')
     app.register_blueprint(leads_bp, url_prefix='/api')
     app.register_blueprint(super_admin_bp, url_prefix='/api')
+    app.register_blueprint(demo_dashboard_bp, url_prefix='/api')
     return app

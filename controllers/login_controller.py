@@ -6,6 +6,7 @@ from flask_jwt_extended import create_access_token, create_refresh_token,jwt_req
 from db import db
 from services.auth_service import AuthService
 from services.menu_service import MenuService
+from services.base_service import BaseService
 
 login_bp = Blueprint('login', __name__)
 
@@ -59,6 +60,48 @@ def get_menus_with_roles():
     role_ids = data.get("role_ids", [])
     menus = MenuService.get_menus_by_roles(role_ids)
     return jsonify(menus)
+
+@login_bp.route('/verify-identity', methods=['POST'])
+def verify_user():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        mob_no = data.get('mob_no')
+
+        # Service returns a dictionary formatted by BaseService
+        response = AuthService.verify_identity(email, mob_no)
+        
+        return jsonify(response), response.get('code', 200)
+
+    except Exception as e:
+        # Standardized error response using BaseService
+        error_response = BaseService.create_response(
+            message=str(e),
+            status="error",
+            code=500
+        )
+        return jsonify(error_response), 500
+
+
+@login_bp.route('/reset-password', methods=['POST'])
+def reset_password_action():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        new_password = data.get('password')
+
+        response = AuthService.reset_password(email, new_password)
+        
+        return jsonify(response), response.get('code', 200)
+
+    except Exception as e:
+        # Standardized error response using BaseService
+        error_response = BaseService.create_response(
+            message=str(e),
+            status="error",
+            code=500
+        )
+        return jsonify(error_response), 500
 
 
 

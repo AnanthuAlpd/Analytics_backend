@@ -18,8 +18,16 @@ from controllers.login_controller import login_bp
 from controllers.leads_controller import leads_bp
 from controllers.super_admin_controller import super_admin_bp
 from controllers.demo_dashboard_controller import demo_dashboard_bp
+from controllers.aswims.users_controller import user_bp
+from controllers.aswims.patient_controller import patient_bp
+
+
+from controllers.aswims.appointment_controller import appointments_bp
+from controllers.aswims.specialities_controller import speciality_bp
+#print("🔥 LOADED app.py FROM:", __file__)
 def create_app():
     app = Flask(__name__)
+    #print("🔥 create_app() CALLED")
     #CORS(app, supports_credentials=True)
     CORS(app, origins=['http://localhost:4200'])
     init_db(app)
@@ -35,6 +43,7 @@ def create_app():
     #app.register_blueprint(monthly_stats_bp)
     #app.register_blueprint(monthly_stats_predicted_bp)
     #app.register_blueprint(sales_chart_bp)
+    app.register_blueprint(api_root_bp, url_prefix='/api') # Adjust prefix as needed
     app.register_blueprint(sales_chart_bp, url_prefix='/api')
     app.register_blueprint(product_bp, url_prefix='/api')
     app.register_blueprint(employee_bp, url_prefix='/api')
@@ -45,4 +54,15 @@ def create_app():
     app.register_blueprint(leads_bp, url_prefix='/api')
     app.register_blueprint(super_admin_bp, url_prefix='/api')
     app.register_blueprint(demo_dashboard_bp, url_prefix='/api')
+    app.register_blueprint(appointments_bp, url_prefix='/api/aswims')
+    app.register_blueprint(speciality_bp, url_prefix='/api/aswims')
+    app.register_blueprint(user_bp,url_prefix='/api/aswims')
+    app.register_blueprint(patient_bp,url_prefix='/api/aswims')
+
+     # 🔴 DEBUG: PRINT ROUTESu
+    # print("\n=== REGISTERED ROUTES ===")
+    # for rule in app.url_map.iter_rules():
+    #     print(rule)
+    # print("========================\n")
+    import models
     return app

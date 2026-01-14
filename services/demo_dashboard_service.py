@@ -6,118 +6,76 @@ from db import db
 from models.demo_products import Products
 from models.demo_sale_stats import DemoSaleStats
 from models.demo_predicted_sales import MonthlySalesStatsPredicted
+from models.demo_dashboard_card_summary import DemoDashboardCardSummary
 from decimal import Decimal
+from sqlalchemy import desc
+from repo.sales_repo import SalesQueries
 
 class DemoDashboardService:
+
     @staticmethod
-    def get_kpi_data():
+    def get_kpi_card_data():
         try:
-            # Define dynamic date ranges
-            today = date.today()
-            current_year_start = date(today.year - 1, today.month, 1)
-            current_year_end = date(today.year, today.month, 1)
-            previous_year_start = date(today.year - 2, today.month, 1)
-            previous_year_end = date(today.year - 1, today.month, 1)
-
-            # Helper: safely convert Decimal or None to float
-            def to_float(value):
-                if value is None:
-                    return 0.0
-                if isinstance(value, Decimal):
-                    return float(value)
-                return float(value)
-
-            # KPI: Total Products
-            total_products = db.session.query(func.count(Products.product_id)).scalar() or 0
-
-            # KPI: Total Predicted Sales
-            total_predicted_sales = db.session.query(
-                func.sum(cast(MonthlySalesStatsPredicted.forecasted_quantity, Float))
-            ).filter(
-                MonthlySalesStatsPredicted.report_date.between(current_year_start, current_year_end)
-            ).scalar()
-            total_predicted_sales = to_float(total_predicted_sales)
-
-            # KPI: Previous Actual Sales
-            previous_actual_sales = db.session.query(
-                func.sum(cast(DemoSaleStats.total_quantity_sold, Float))
-            ).filter(
-                DemoSaleStats.report_date.between(previous_year_start, previous_year_end)
-            ).scalar()
-            previous_actual_sales = to_float(previous_actual_sales)
-
-            # KPI: Average Growth (Current vs Previous)
-            current_sales_subquery = db.session.query(
-                DemoSaleStats.product_id,
-                func.sum(cast(DemoSaleStats.total_quantity_sold, Float)).label('current_sales')
-            ).filter(
-                DemoSaleStats.report_date.between(current_year_start, current_year_end)
-            ).group_by(DemoSaleStats.product_id).subquery()
-
-            previous_sales_subquery = db.session.query(
-                DemoSaleStats.product_id,
-                func.sum(cast(DemoSaleStats.total_quantity_sold, Float)).label('previous_sales')
-            ).filter(
-                DemoSaleStats.report_date.between(previous_year_start, previous_year_end)
-            ).group_by(DemoSaleStats.product_id).subquery()
-
-            growth_subquery = db.session.query(
-                current_sales_subquery.c.product_id,
-                func.coalesce(
-                    (
-                        (func.coalesce(current_sales_subquery.c.current_sales, 0.0) -
-                         func.coalesce(previous_sales_subquery.c.previous_sales, 0.0)) /
-                        func.nullif(func.coalesce(previous_sales_subquery.c.previous_sales, 0.0), 0.0)
-                    ) * 100.0,
-                    0.0
-                ).label('growth')
-            ).outerjoin(
-                previous_sales_subquery,
-                current_sales_subquery.c.product_id == previous_sales_subquery.c.product_id
-            ).subquery()
-
-            average_growth = db.session.query(func.avg(growth_subquery.c.growth)).scalar()
-            average_growth = round(to_float(average_growth), 2)
-
-            # KPI: Total Backlogs
-            total_backlogs = 0
-
-            # KPI: Prediction Accuracy
-            historical_sales = db.session.query(
-                func.sum(cast(DemoSaleStats.total_quantity_sold, Float))
-            ).filter(
-                DemoSaleStats.report_date.between(current_year_start, current_year_end)
-            ).scalar()
-            historical_sales = to_float(historical_sales)
-
-            predicted_sales = total_predicted_sales
-            if historical_sales > 0:
-                prediction_accuracy = ((predicted_sales - historical_sales) / historical_sales) * 100.0
-            else:
-                prediction_accuracy = 0.0
-            prediction_accuracy = round(prediction_accuracy, 2)
-
-            # Final KPI Summary
+            current_year = datetime.now().year
+            record = DemoDashboardCardSummary.query.filter_by(year=current_year).first()
+            if not record:
+                return None
+            # 1. Extract values safely (converting None to 0)
+            total_products = record.total_products if record.total_products else 0
+            predicted_sales = float(record.predicted_sales) if record.predicted_sales else 0.0
+            current_growth = float(record.current_growth_rate) if record.current_growth_rate else 0.0
+            predicted_growth = float(record.predicted_growth_rate) if record.predicted_growth_rate else 0.0
+            accuracy = float(record.prediction_accuracy) if record.prediction_accuracy else 0.0
+            monthly_avg_backorder = float(record.monthly_avg_backorder) if record.monthly_avg_backorder else 0.0
+            # 2. Construct the specific dictionary you requested
             kpi_summary = {
                 'totalProducts': int(total_products),
-                'totalPredictedSales': total_predicted_sales,
-                'previousActualSales': previous_actual_sales,
-                'averageGrowth': average_growth,
-                'totalBacklogs': total_backlogs,
-                'predictionAccuracy': prediction_accuracy
+                'predictedSales': predicted_sales,
+                'currentGrowthRate': current_growth,
+                'predictedGrowthRate': predicted_growth,
+                'monthly_avg_backorder':monthly_avg_backorder,
+                'predictionAccuracy': accuracy
             }
-
-            # Round all float values to 2 decimals for API output
+            # 3. Round all float values to 2 decimals for clean API output
             for key, value in kpi_summary.items():
                 if isinstance(value, float):
                     kpi_summary[key] = round(value, 2)
-
             return kpi_summary
-
         except Exception as e:
             current_app.logger.error(f"Error fetching KPI data: {str(e)}")
             raise Exception("Failed to fetch KPI data")
     
+
+    @staticmethod
+    def _to_series(data, series_type):
+        return [
+            {
+                'type': series_type,
+                'month': row.month,
+                'total_quantity_sold': float(row.value or 0)
+            }
+            for row in data
+        ]
+
+    @staticmethod
+    def get_monthly_comparison(product_id=None, months=None):
+
+        actual_rows = SalesQueries.get_actual_monthly_totals(product_id, months)
+        predicted_rows = SalesQueries.get_predicted_monthly_totals(product_id, months)
+
+        actual = DemoDashboardService._to_series(actual_rows, 'actual')
+        predicted = DemoDashboardService._to_series(predicted_rows, 'predicted')
+
+        return {
+            'actual': actual,
+            'predicted': predicted,
+            'metadata': {
+                'actual_start': actual[0]['month'] if actual else None,
+                'actual_end': actual[-1]['month'] if actual else None,
+                'prediction_start': predicted[0]['month'] if predicted else None
+            }
+        }
+   
     # -------------------------------
     # 1️⃣ Base Month Dictionary Helper
     # -------------------------------
@@ -233,7 +191,7 @@ class DemoDashboardService:
         ]
     
     @staticmethod
-    def get_top_product_comparison(limit=6):
+    def get_top_product_comparison(limit=10):
         """Get top products by comparing current vs predicted sales (current year)."""
         current_year = datetime.now().year
 
@@ -286,6 +244,52 @@ class DemoDashboardService:
         ]
         #print(formatted)
         return formatted
+    
+    def get_total_actual_vs_predicted(product_id=None):
+        """
+        Returns total actual vs predicted sales for the current year.
+        Optionally filters by product_id.
+        Output format: ngx-charts bar chart compatible.
+        """
+
+        current_year = datetime.now().year
+
+        # ---- Total Actual ----
+        actual_query = (
+            db.session.query(
+                func.sum(DemoSaleStats.total_quantity_sold)
+            )
+            .filter(func.year(DemoSaleStats.report_date) == current_year)
+        )
+
+        if product_id:
+            actual_query = actual_query.filter(
+                DemoSaleStats.product_id == product_id
+            )
+
+        total_actual = actual_query.scalar() or 0
+
+        # ---- Total Predicted ----
+        predicted_query = (
+            db.session.query(
+                func.sum(MonthlySalesStatsPredicted.forecasted_quantity)
+            )
+            .filter(func.year(MonthlySalesStatsPredicted.report_date) == current_year)
+        )
+
+        if product_id:
+            predicted_query = predicted_query.filter(
+                MonthlySalesStatsPredicted.product_id == product_id
+            )
+
+        total_predicted = predicted_query.scalar() or 0
+
+        # ---- ngx-charts Bar Format ----
+        return [
+            {"name": "Actual", "value": int(total_actual)},
+            {"name": "Predicted", "value": int(total_predicted)}
+        ]
+
 
     @staticmethod
     def get_product_growth_performance(top_n: int = 6):

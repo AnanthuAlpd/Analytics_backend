@@ -1,4 +1,5 @@
-from models.pr_monthly_sales import MonthlySales
+# from models.pr_monthly_sales import MonthlySales
+from models.monthly_sales_stats import MonthlySalesStats
 from models.pr_product_master import Product
 from models.clients import Client
 from db import db
@@ -11,37 +12,37 @@ def get_kpi_summary(client_id):
 
     # Total revenue for this client
     total_value = db.session.query(
-        func.sum(Product.unit_cost * MonthlySales.qty_sold)
-    ).select_from(MonthlySales)\
-     .join(Product, Product.product_id == MonthlySales.product_id)\
-     .filter(MonthlySales.report_date.between(start, end))\
-     .filter(MonthlySales.client_id == client_id)\
+        func.sum(Product.unit_cost * MonthlySalesStats.qty_sold)
+    ).select_from(MonthlySalesStats)\
+     .join(Product, Product.product_id == MonthlySalesStats.product_id)\
+     .filter(MonthlySalesStats.report_date.between(start, end))\
+     .filter(MonthlySalesStats.client_id == client_id)\
      .scalar()
 
     # Highest selling product by quantity for this client
     top = db.session.query(
         Product.name,
         Product.hsn_no,
-        func.sum(MonthlySales.qty_sold).label('total_qty')
-    ).select_from(MonthlySales)\
-     .join(Product, Product.product_id == MonthlySales.product_id)\
-     .filter(MonthlySales.report_date.between(start, end))\
-     .filter(MonthlySales.client_id == client_id)\
+        func.sum(MonthlySalesStats.qty_sold).label('total_qty')
+    ).select_from(MonthlySalesStats)\
+     .join(Product, Product.product_id == MonthlySalesStats.product_id)\
+     .filter(MonthlySalesStats.report_date.between(start, end))\
+     .filter(MonthlySalesStats.client_id == client_id)\
      .group_by(Product.name, Product.hsn_no)\
-     .order_by(func.sum(MonthlySales.qty_sold).desc())\
+     .order_by(func.sum(MonthlySalesStats.qty_sold).desc())\
      .limit(1).first()
 
     # Top revenue generating product for this client
     top_revenue = db.session.query(
         Product.name,
         Product.hsn_no,
-        func.sum(Product.unit_cost * MonthlySales.qty_sold).label('total_revenue')
-    ).select_from(MonthlySales)\
-     .join(Product, Product.product_id == MonthlySales.product_id)\
-     .filter(MonthlySales.report_date.between(start, end))\
-     .filter(MonthlySales.client_id == client_id)\
+        func.sum(Product.unit_cost * MonthlySalesStats.qty_sold).label('total_revenue')
+    ).select_from(MonthlySalesStats)\
+     .join(Product, Product.product_id == MonthlySalesStats.product_id)\
+     .filter(MonthlySalesStats.report_date.between(start, end))\
+     .filter(MonthlySalesStats.client_id == client_id)\
      .group_by(Product.name, Product.hsn_no)\
-     .order_by(func.sum(Product.unit_cost * MonthlySales.qty_sold).desc())\
+     .order_by(func.sum(Product.unit_cost * MonthlySalesStats.qty_sold).desc())\
      .limit(1).first()
 
     return {
@@ -65,12 +66,12 @@ def get_top_10_selling_products(client_id):
     results = db.session.query(
         Product.name,
         Product.hsn_no,
-        func.sum(MonthlySales.qty_sold).label("value")
-    ).join(Product, Product.product_id == MonthlySales.product_id)\
-     .filter(MonthlySales.report_date.between(start, end))\
-     .filter(MonthlySales.client_id == client_id)\
+        func.sum(MonthlySalesStats.qty_sold).label("value")
+    ).join(Product, Product.product_id == MonthlySalesStats.product_id)\
+     .filter(MonthlySalesStats.report_date.between(start, end))\
+     .filter(MonthlySalesStats.client_id == client_id)\
      .group_by(Product.product_id, Product.name, Product.hsn_no)\
-     .order_by(func.sum(MonthlySales.qty_sold).desc())\
+     .order_by(func.sum(MonthlySalesStats.qty_sold).desc())\
      .limit(10)\
      .all()
 
@@ -89,13 +90,13 @@ def get_top_10_revenue_products(client_id):
     results = db.session.query(
         Product.name,
         Product.hsn_no,
-        func.sum(Product.unit_cost * MonthlySales.qty_sold).label("value")
-    ).select_from(MonthlySales)\
-    .join(Product, Product.product_id == MonthlySales.product_id)\
-     .filter(MonthlySales.report_date.between(start, end))\
-     .filter(MonthlySales.client_id==client_id)\
+        func.sum(Product.unit_cost * MonthlySalesStats.qty_sold).label("value")
+    ).select_from(MonthlySalesStats)\
+    .join(Product, Product.product_id == MonthlySalesStats.product_id)\
+     .filter(MonthlySalesStats.report_date.between(start, end))\
+     .filter(MonthlySalesStats.client_id==client_id)\
      .group_by(Product.product_id, Product.name, Product.hsn_no)\
-     .order_by(func.sum(Product.unit_cost * MonthlySales.qty_sold).desc())\
+     .order_by(func.sum(Product.unit_cost * MonthlySalesStats.qty_sold).desc())\
      .limit(10)\
      .all()
 
@@ -115,14 +116,14 @@ def get_least_selling_products(client_id,limit=10):
         Product.name,
         Product.hsn_no,
         Product.unit,
-        func.sum(MonthlySales.qty_sold).label("qty")
-    ).select_from(MonthlySales)\
-    .join(Product, Product.product_id == MonthlySales.product_id)\
-    .filter(MonthlySales.report_date.between(start, end))\
-    .filter(MonthlySales.client_id==client_id)\
+        func.sum(MonthlySalesStats.qty_sold).label("qty")
+    ).select_from(MonthlySalesStats)\
+    .join(Product, Product.product_id == MonthlySalesStats.product_id)\
+    .filter(MonthlySalesStats.report_date.between(start, end))\
+    .filter(MonthlySalesStats.client_id==client_id)\
     .group_by(Product.product_id, Product.name, Product.hsn_no, Product.unit)\
-    .having(func.sum(MonthlySales.qty_sold) > 0)\
-    .order_by(func.sum(MonthlySales.qty_sold))\
+    .having(func.sum(MonthlySalesStats.qty_sold) > 0)\
+    .order_by(func.sum(MonthlySalesStats.qty_sold))\
     .limit(limit).all()
 
     tableData= [{
@@ -141,13 +142,13 @@ def get_unsold_products(client_id):
 
     # Subquery: sum of qty_sold per product for April
     subq = db.session.query(
-        MonthlySales.product_id,
-        func.sum(MonthlySales.qty_sold).label('total_qty')
+        MonthlySalesStats.product_id,
+        func.sum(MonthlySalesStats.qty_sold).label('total_qty')
     ).filter(
-        MonthlySales.report_date.between(start, end)
+        MonthlySalesStats.report_date.between(start, end)
     ).filter(
-        MonthlySales.client_id==client_id
-    ).group_by(MonthlySales.product_id).subquery()
+        MonthlySalesStats.client_id==client_id
+    ).group_by(MonthlySalesStats.product_id).subquery()
 
     # Outer query: left join to find products with no or zero sales
     results = db.session.query(
@@ -179,13 +180,13 @@ def get_low_performance_products(client_id,threshold=10, limit=10):
         Product.name,
         Product.hsn_no,
         Product.unit,
-        func.sum(MonthlySales.qty_sold).label("qty")
-    ).join(Product, Product.product_id == MonthlySales.product_id)\
-     .filter(MonthlySales.report_date.between(start, end))\
-     .filter(MonthlySales.client_id==client_id)\
+        func.sum(MonthlySalesStats.qty_sold).label("qty")
+    ).join(Product, Product.product_id == MonthlySalesStats.product_id)\
+     .filter(MonthlySalesStats.report_date.between(start, end))\
+     .filter(MonthlySalesStats.client_id==client_id)\
      .group_by(Product.product_id, Product.name, Product.hsn_no, Product.unit)\
-     .having(func.sum(MonthlySales.qty_sold) < threshold)\
-     .order_by(func.sum(MonthlySales.qty_sold))\
+     .having(func.sum(MonthlySalesStats.qty_sold) < threshold)\
+     .order_by(func.sum(MonthlySalesStats.qty_sold))\
      .limit(limit).all()
 
     return [{
@@ -217,18 +218,18 @@ def get_monthly_sales_trend(client_id, product_id):
     end = date(2024, 12, 31)
 
     query = db.session.query(
-        extract('month', MonthlySales.report_date).label('month'),
-        func.sum(MonthlySales.qty_sold).label('total_units'),
-        func.sum(Product.unit_cost * MonthlySales.qty_sold).label('total_revenue')
-    ).join(Product, Product.product_id == MonthlySales.product_id)\
-     .filter(MonthlySales.client_id == client_id)\
-     .filter(MonthlySales.report_date.between(start, end))
+        extract('month', MonthlySalesStats.report_date).label('month'),
+        func.sum(MonthlySalesStats.qty_sold).label('total_units'),
+        func.sum(Product.unit_cost * MonthlySalesStats.qty_sold).label('total_revenue')
+    ).join(Product, Product.product_id == MonthlySalesStats.product_id)\
+     .filter(MonthlySalesStats.client_id == client_id)\
+     .filter(MonthlySalesStats.report_date.between(start, end))
 
     if product_id:
-        query = query.filter(MonthlySales.product_id == product_id)
+        query = query.filter(MonthlySalesStats.product_id == product_id)
 
-    query = query.group_by(extract('month', MonthlySales.report_date))\
-                 .order_by(extract('month', MonthlySales.report_date))
+    query = query.group_by(extract('month', MonthlySalesStats.report_date))\
+                 .order_by(extract('month', MonthlySalesStats.report_date))
 
     results = query.all()
 

@@ -1,4 +1,4 @@
-from flask import Blueprint, current_app,request
+from flask import Blueprint, current_app,request,jsonify
 from services.base_service import BaseService
 from services.demo_dashboard_service import DemoDashboardService
 import traceback
@@ -8,17 +8,16 @@ import traceback
 demo_dashboard_bp = Blueprint('dashboard', __name__)
 
 @demo_dashboard_bp.route('/demo-dashboard/kpi', methods=['GET'])
+
 def get_kpi_data():
     try:
-        # Fetch KPI data without filters
-        kpi_data = DemoDashboardService.get_kpi_data()
+        kpi_data=DemoDashboardService.get_kpi_card_data()
         return BaseService.create_response(
             data=kpi_data,
             message="KPI data fetched successfully",
             status="success",
             code=200
         )
-
     except Exception as e:
         current_app.logger.error(f"Server error: {str(e)}")
         return BaseService.create_response(
@@ -26,6 +25,34 @@ def get_kpi_data():
             status="error",
             code=500
         )
+
+@demo_dashboard_bp.route('/demo-dashboard/monthly-comparison')
+def monthly_comparison():
+    product_id = request.args.get('product_id', type=int)
+    months = request.args.get('months', type=int)
+
+    return jsonify(
+        DemoDashboardService.get_monthly_comparison(product_id, months)
+    )
+
+# def get_kpi_data():
+#     try:
+#         # Fetch KPI data without filters
+#         kpi_data = DemoDashboardService.get_kpi_data()
+#         return BaseService.create_response(
+#             data=kpi_data,
+#             message="KPI data fetched successfully",
+#             status="success",
+#             code=200
+#         )
+
+#     except Exception as e:
+#         current_app.logger.error(f"Server error: {str(e)}")
+#         return BaseService.create_response(
+#             message="Internal server error",
+#             status="error",
+#             code=500
+#         )
 
 @demo_dashboard_bp.route('/demo-dashboard/sales-trend', methods=['GET'])
 def get_sales_trend():
@@ -48,6 +75,8 @@ def get_sales_trend():
             code=500
         )
 
+
+
 @demo_dashboard_bp.route('/demo-dashboard/product-comparison', methods=['GET'])
 def get_top_product_comparison():
     try:
@@ -68,6 +97,28 @@ def get_top_product_comparison():
             status="error",
             code=500
         )
+
+@demo_dashboard_bp.route('/demo-dashboard/product-comparison-total', methods=['GET'])
+def get_total_product_comparison():
+    try:
+        # Fetch KPI data without filters
+        product_id = request.args.get('product_id', type=int)
+        result = DemoDashboardService.get_total_actual_vs_predicted(product_id)
+        return BaseService.create_response(
+            data=result,
+            message="total product comparison data fetched successfully- bar chart",
+            status="success",
+            code=200
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Server error: {str(e)}")
+        return BaseService.create_response(
+            message="Internal server error",
+            status="error",
+            code=500
+        )
+
 
 @demo_dashboard_bp.route('/demo-dashboard/product-growth', methods=['GET'])
 def get_product_growth_performance():

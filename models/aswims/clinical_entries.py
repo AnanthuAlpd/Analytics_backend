@@ -12,7 +12,6 @@ class AswimsClinicalEntry(db.Model):
     )
 
     daily_notes = db.Column(db.Text, nullable=False)
-    medicines = db.Column(db.Text, nullable=True)
 
     # Logical / clinical date (app-controlled)
     entry_date = db.Column(db.DateTime, nullable=False)
@@ -45,7 +44,6 @@ class AswimsClinicalEntry(db.Model):
             "id": self.id,
             "patient_id": self.patient_id,
             "daily_notes": self.daily_notes,
-            "medicines": self.medicines,
             "entry_date": self.entry_date.isoformat() if self.entry_date else None,
             "created_by": self.created_by,
             "updated_by": self.updated_by,

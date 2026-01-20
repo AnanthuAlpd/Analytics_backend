@@ -30,7 +30,6 @@ class ClinicalService(BaseService):
                 new_clinical = AswimsClinicalEntry(
                     patient_id=data.get('patient_id'),
                     daily_notes=data.get('daily_notes'),
-                    medicines=data.get('medicines'),
                     entry_date=datetime.now(),
                     created_by=staff_id
                 )

@@ -28,6 +28,17 @@ def get_patients_by_ward(ward_id):
     Standardized via BaseService.
     """
     return PatientRegistrationService.get_patients_by_ward(ward_id)
+
+@patient_bp.route('/get_patient_by_id/<int:patient_id>', methods=['GET'])
+# @jwt_required()
+def get_patients_by_id(patient_id):
+    """
+    Fetch all active patients for a specific ward.
+    Standardized via BaseService.
+    """
+    return PatientRegistrationService.get_patients_by_id(patient_id)
+
+
 # controllers/aswims/patient_controller.py
 
 @patient_bp.route('/clinical-entry', methods=['POST'])
@@ -62,3 +73,11 @@ def get_patient_clinical_history(patient_id):
     Fetches patient history using standardized BaseService formatting.
     """
     return ClinicalService.get_patient_history(patient_id)
+
+@patient_bp.route('/med-frequencies',methods=['GET'])
+def get_all_med_frequencies():
+    return ClinicalService.get_med_frequencies()
+
+@patient_bp.route('/med-categories',methods=['GET'])
+def get_all_med_categories():
+    return ClinicalService.get_med_categories()

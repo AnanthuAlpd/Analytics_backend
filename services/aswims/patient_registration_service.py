@@ -11,7 +11,7 @@ class PatientRegistrationService(BaseService): # Inherit if you have shared logi
         try:
             wards = AswimsWard.query.filter_by(is_active=True).all()
             ward_data = [{"id": w.id, "ward_name": w.ward_name} for w in wards]
-            return BaseService.create_response(data=ward_data)
+            return BaseService.create_response(data=ward_data,message="Ward data fetched succesfully")
         except Exception as e:
             return BaseService.create_response(message=str(e), status="error", code=500)
 
@@ -66,6 +66,31 @@ class PatientRegistrationService(BaseService): # Inherit if you have shared logi
         except Exception as e:
             return BaseService.create_response(
                 message=f"Error fetching ward data: {str(e)}", 
+                status="error", 
+                code=500
+            )
+    
+    @staticmethod
+    def get_patients_by_id(patient_id):
+        try:
+            # Fetch only patients who are currently 'Admitted' in the specific ward
+            patient = AswimsPatient.query.filter_by(
+                id=patient_id, 
+                status='Admitted'
+            )
+
+            # Convert to list of dictionaries using the model's to_dict method
+            patient_list = [p.to_dict() for p in patient]
+            
+            return BaseService.create_response(
+                data=patient_list, 
+                message=f"Fetched {len(patient_list)} patients", 
+                status="success", 
+                code=200
+            )
+        except Exception as e:
+            return BaseService.create_response(
+                message=f"Error fetching single patient data: {str(e)}", 
                 status="error", 
                 code=500
             )

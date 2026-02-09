@@ -19,9 +19,9 @@ from controllers.leads_controller import leads_bp
 from controllers.super_admin_controller import super_admin_bp
 from controllers.demo_dashboard_controller import demo_dashboard_bp
 from controllers.aswims.users_controller import user_bp
+from controllers.business_analytics_controller import business_analytics_bp
+from controllers.expense_controller import expense_bp
 from controllers.aswims.patient_controller import patient_bp
-
-
 from controllers.aswims.appointment_controller import appointments_bp
 from controllers.aswims.specialities_controller import speciality_bp
 #print("🔥 LOADED app.py FROM:", __file__)

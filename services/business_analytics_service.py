@@ -14,14 +14,22 @@ class BusinessAnalyticsService:
     """
 
     @staticmethod
+    def _get_latest_year():
+        """Helper to find the latest year with sales data for the demo."""
+        try:
+            latest_year = db.session.query(func.max(func.year(DemoSaleStats.report_date))).scalar()
+            return latest_year if latest_year else datetime.now().year
+        except Exception:
+            return 2023  # Fallback to demo year
+
+    @staticmethod
     def get_revenue_metrics():
         """
-        Calculate comprehensive revenue and profit metrics for the current year.
+        Calculate comprehensive revenue and profit metrics for the latest year.
         Returns: Total revenue, total cost, gross profit, profit margin, AOV
         """
         try:
-            # Use 2023 as current year for demo (where data exists)
-            current_year = 2023
+            current_year = BusinessAnalyticsService._get_latest_year()
             
             # Get sales data with product pricing
             revenue_query = (
@@ -81,8 +89,7 @@ class BusinessAnalyticsService:
         Returns data formatted for pie/donut chart.
         """
         try:
-            # Use 2023 as current year for demo (where data exists)
-            current_year = 2023
+            current_year = BusinessAnalyticsService._get_latest_year()
             
             category_data = (
                 db.session.query(
@@ -122,7 +129,12 @@ class BusinessAnalyticsService:
         Returns data for line chart showing revenue vs cost over time.
         """
         try:
-            end_date = datetime.now()
+            # For demo purposes, we base the timeframe on the latest available data
+            latest_date = db.session.query(func.max(DemoSaleStats.report_date)).scalar()
+            if not latest_date:
+                latest_date = datetime.now()
+            
+            end_date = latest_date
             start_date = end_date - timedelta(days=months * 30)
             
             monthly_data = (
@@ -167,8 +179,13 @@ class BusinessAnalyticsService:
         """
         try:
             alerts = []
-            current_month = datetime.now().replace(day=1)
-            prev_month = (current_month - timedelta(days=1)).replace(day=1)
+            latest_date = db.session.query(func.max(DemoSaleStats.report_date)).scalar()
+            if not latest_date:
+                latest_date = datetime.now()
+                
+            current_month_date = latest_date.replace(day=1)
+            prev_month_date = (current_month_date - timedelta(days=1)).replace(day=1)
+            current_year = current_month_date.year
             
             # Alert 1: Products with declining sales (>20% drop)
             declining_products = (
@@ -186,7 +203,7 @@ class BusinessAnalyticsService:
                     )).label('prev_sales')
                 )
                 .join(Products, DemoSaleStats.product_id == Products.product_id)
-                .filter(func.year(DemoSaleStats.report_date) == 2023)
+                .filter(func.year(DemoSaleStats.report_date) == current_year)
                 .group_by(Products.product_name)
                 .having(func.sum(case(
                     (func.month(DemoSaleStats.report_date) == prev_month.month, 
@@ -212,8 +229,7 @@ class BusinessAnalyticsService:
                             'action': 'Review pricing or marketing strategy'
                         })
             
-            # Alert 2: Products exceeding forecast (positive surprise)
-            current_year = 2023
+            current_year = BusinessAnalyticsService._get_latest_year()
             outperforming = (
                 db.session.query(
                     Products.product_name,
@@ -244,10 +260,82 @@ class BusinessAnalyticsService:
                         'action': 'Consider increasing inventory'
                     })
             
+            # Alert 3: Low stock for popular items (example threshold)
+            low_stock_products = (
+                db.session.query(
+                    Products.product_name,
+                    DemoSaleStats.closing_stock,
+                    func.sum(DemoSaleStats.total_quantity_sold).label('total_sold')
+                )
+                .join(DemoSaleStats, Products.product_id == DemoSaleStats.product_id)
+                .filter(func.year(DemoSaleStats.report_date) == current_year,
+                        func.month(DemoSaleStats.report_date) == latest_date.month,
+                        DemoSaleStats.closing_stock < 50)
+                .group_by(Products.product_name, DemoSaleStats.closing_stock)
+                .all()
+            )
+
+            for product in low_stock_products:
+                alerts.append({
+                    'type': 'warning',
+                    'category': 'Inventory Management',
+                    'title': f'{product.product_name} - Low Stock Alert',
+                    'message': f'Only {product.closing_stock} units left at month end.',
+                    'severity': 'high',
+                    'action': 'Reorder immediately to prevent stock-out'
+                })
+
             return alerts[:10]  # Return top 10 alerts
             
         except Exception as e:
             current_app.logger.error(f"Error generating business alerts: {str(e)}")
+            raise
+
+    @staticmethod
+    def get_inventory_health():
+        """
+        Analyze inventory health: overstock, stockouts, and inventory value.
+        """
+        try:
+            current_year = BusinessAnalyticsService._get_latest_year()
+            latest_date = db.session.query(func.max(DemoSaleStats.report_date)).scalar()
+            
+            # 1. Total Inventory Value (at cost)
+            inventory_value_query = (
+                db.session.query(
+                    func.sum(DemoSaleStats.closing_stock * Products.cost_price).label('total_value_cost'),
+                    func.sum(DemoSaleStats.closing_stock * Products.sale_price).label('total_value_sale')
+                )
+                .join(Products, DemoSaleStats.product_id == Products.product_id)
+                .filter(DemoSaleStats.report_date == latest_date)
+                .first()
+            )
+            
+            # 2. Identify At-Risk Products (Low stock vs Avg Monthly Sales)
+            # For demo, we just look at closing stock < 20
+            at_risk = (
+                db.session.query(
+                    Products.product_name,
+                    DemoSaleStats.closing_stock
+                )
+                .join(DemoSaleStats, Products.product_id == DemoSaleStats.product_id)
+                .filter(DemoSaleStats.report_date == latest_date,
+                        DemoSaleStats.closing_stock < 20)
+                .limit(5)
+                .all()
+            )
+            
+            return {
+                'total_inventory_value_cost': round(float(inventory_value_query.total_value_cost or 0), 2),
+                'total_inventory_value_sale': round(float(inventory_value_query.total_value_sale or 0), 2),
+                'at_risk_products': [
+                    {'name': row.product_name, 'stock': row.closing_stock}
+                    for row in at_risk
+                ],
+                'status': 'Healthy' if len(at_risk) < 3 else 'Action Required'
+            }
+        except Exception as e:
+            current_app.logger.error(f"Error fetching inventory health: {str(e)}")
             raise
 
     @staticmethod
@@ -256,8 +344,7 @@ class BusinessAnalyticsService:
         Get top performing products by revenue for current month.
         """
         try:
-            # Use 2023 data for demo
-            current_year = 2023
+            current_year = BusinessAnalyticsService._get_latest_year()
             
             top_products = (
                 db.session.query(

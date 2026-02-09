@@ -83,6 +83,25 @@ def get_business_alerts():
             code=500
         )
 
+@business_analytics_bp.route('/business-analytics/inventory-health', methods=['GET'])
+def get_inventory_health():
+    """Get inventory health metrics"""
+    try:
+        data = BusinessAnalyticsService.get_inventory_health()
+        return BaseService.create_response(
+            data=data,
+            message="Inventory health data fetched successfully",
+            status="success",
+            code=200
+        )
+    except Exception as e:
+        current_app.logger.error(f"Error fetching inventory health: {str(e)}")
+        return BaseService.create_response(
+            message="Internal server error",
+            status="error",
+            code=500
+        )
+
 @business_analytics_bp.route('/business-analytics/top-performers', methods=['GET'])
 def get_top_performers():
     """Get top performing products"""

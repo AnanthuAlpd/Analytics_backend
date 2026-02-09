@@ -80,9 +80,9 @@ def get_sales_trend():
 @demo_dashboard_bp.route('/demo-dashboard/product-comparison', methods=['GET'])
 def get_top_product_comparison():
     try:
-        # Fetch KPI data without filters
-        #product_id = request.args.get('product_id', type=int)
-        result = DemoDashboardService.get_top_product_comparison()
+        # Fetch KPI data with optional product filter
+        product_id = request.args.get('product_id', type=int)
+        result = DemoDashboardService.get_top_product_comparison(product_id)
         return BaseService.create_response(
             data=result,
             message="product comparison data fetched successfully for line chart",
@@ -166,6 +166,24 @@ def get_forecast_summary():
         # The client doesn't need the traceback, but you need it for debugging.
         return BaseService.create_response(
             message="Internal server error", 
+            status="error",
+            code=500
+        )
+
+@demo_dashboard_bp.route('/demo-dashboard/products', methods=['GET'])
+def get_products_list():
+    try:
+        products = DemoDashboardService.get_products()
+        return BaseService.create_response(
+            data=products,
+            message="Products fetched successfully",
+            status="success",
+            code=200
+        )
+    except Exception as e:
+        current_app.logger.error(f"Error fetching products: {str(e)}")
+        return BaseService.create_response(
+            message="Internal server error",
             status="error",
             code=500
         )

@@ -14,9 +14,28 @@ from repo.sales_repo import SalesQueries
 class DemoDashboardService:
 
     @staticmethod
+    def _get_latest_year():
+        """Helper to find the latest year with sales data for the demo."""
+        try:
+            latest_year = db.session.query(func.max(func.year(DemoSaleStats.report_date))).scalar()
+            return latest_year if latest_year else datetime.now().year
+        except Exception:
+            return 2023  # Fallback
+            
+    @staticmethod
+    def get_products():
+        """Retrieve all products for the dashboard filter."""
+        try:
+            products = db.session.query(Products.product_id, Products.product_name).all()
+            return [{"id": p.product_id, "name": p.product_name} for p in products]
+        except Exception as e:
+            current_app.logger.error(f"Error fetching products: {str(e)}")
+            return []
+
+    @staticmethod
     def get_kpi_card_data():
         try:
-            current_year = datetime.now().year
+            current_year = DemoDashboardService._get_latest_year()
             record = DemoDashboardCardSummary.query.filter_by(year=current_year).first()
             if not record:
                 return None
@@ -80,14 +99,20 @@ class DemoDashboardService:
     # 1️⃣ Base Month Dictionary Helper
     # -------------------------------
     @staticmethod
-    def _generate_base_month_dict(year: int):
+    def _generate_base_month_dict(start_date: datetime, end_date: datetime):
         """
-        Generates a list and dictionary for all 12 months of the given year.
-        Example:
-            months = ['2025-01', '2025-02', ..., '2025-12']
-            month_dict = {'2025-01': 0, ..., '2025-12': 0}
+        Generates a list and dictionary for all months in the given range.
         """
-        months = [f"{year}-{str(m).zfill(2)}" for m in range(1, 13)]
+        months = []
+        curr = start_date.replace(day=1)
+        while curr <= end_date:
+            months.append(curr.strftime('%Y-%m'))
+            # Move to next month
+            if curr.month == 12:
+                curr = curr.replace(year=curr.year + 1, month=1)
+            else:
+                curr = curr.replace(month=curr.month + 1)
+        
         month_dict = {m: 0 for m in months}
         return months, month_dict
 
@@ -95,20 +120,18 @@ class DemoDashboardService:
     # 2️⃣ Monthly Data Fetcher
     # -------------------------------
     @staticmethod
-    def _fetch_monthly_data(model, value_column, date_column, product_id=None):
+    def _fetch_monthly_data(model, value_column, date_column, product_id=None, min_date=None, max_date=None):
         """
-        Fetches the SUM of monthly sales (historical or predicted) for a given year.
-        Supports both:
-          - Single product mode (when product_id is given)
-          - All-products combined mode (when product_id is None)
+        Fetches the SUM of monthly sales for a given date range.
         """
         date_format = func.date_format  # ✅ MySQL-compatible
-        current_year = datetime.now().year
-        start_date = datetime(current_year, 1, 1)
-        end_date = datetime(current_year, 12, 31, 23, 59, 59)
+        
+        # Determine actual range
+        start_date = min_date if min_date else datetime(2018, 1, 1)
+        end_date = max_date if max_date else datetime.now()
 
-        # Generate base dictionary
-        months, month_dict = DemoDashboardService._generate_base_month_dict(current_year)
+        # Generate base dictionary for the ENTIRE range
+        months, month_dict = DemoDashboardService._generate_base_month_dict(start_date, end_date)
 
         # Build query
         query = db.session.query(
@@ -126,12 +149,10 @@ class DemoDashboardService:
                  .order_by('month')
         )
 
-        # Debug SQL (optional)
-        # print(str(query.statement.compile(compile_kwargs={"literal_binds": True})))
-
         # Execute and fill data
         for month, value in query.all():
-            month_dict[month] = int(value or 0)
+            if month in month_dict:
+                month_dict[month] = int(value or 0)
 
         # Format as ngx-charts compatible array
         series = [{"name": m, "value": month_dict[m]} for m in months]
@@ -165,25 +186,38 @@ class DemoDashboardService:
     @staticmethod
     def get_sales_trend(product_id=None):
         """
-        Returns formatted data for ngx-charts.
-        If product_id is provided → individual product data.
-        Else → total sales across all products.
+        Returns formatted data for ngx-charts with NO overlap.
+        Shows Historical (2018-2025) and Predicted (2026).
         """
-        if product_id:
-            # Single product mode
-            historical, predicted = DemoDashboardService.get_series_for_product(product_id)
-        else:
-            # All products combined mode (sum of all)
-            historical = DemoDashboardService._fetch_monthly_data(
-                DemoSaleStats,
-                DemoSaleStats.total_quantity_sold,
-                DemoSaleStats.report_date
-            )
-            predicted = DemoDashboardService._fetch_monthly_data(
-                MonthlySalesStatsPredicted,
-                MonthlySalesStatsPredicted.forecasted_quantity,
-                MonthlySalesStatsPredicted.report_date
-            )
+        # 1. Define Split Point
+        # Historical: 2018-01-01 to 2025-12-31
+        # Predicted: 2026-01-01 to 2026-12-31
+        
+        actual_start = datetime(2018, 1, 1)
+        actual_end = datetime(2025, 12, 31, 23, 59, 59)
+        
+        prediction_start = datetime(2026, 1, 1)
+        prediction_end = datetime(2026, 12, 31, 23, 59, 59)
+
+        # 2. Fetch Actual Historical Data (2018-2025)
+        historical = DemoDashboardService._fetch_monthly_data(
+            DemoSaleStats,
+            DemoSaleStats.total_quantity_sold,
+            DemoSaleStats.report_date,
+            product_id,
+            min_date=actual_start,
+            max_date=actual_end
+        )
+
+        # 3. Fetch Predicted Data (2026)
+        predicted = DemoDashboardService._fetch_monthly_data(
+            MonthlySalesStatsPredicted,
+            MonthlySalesStatsPredicted.forecasted_quantity,
+            MonthlySalesStatsPredicted.report_date,
+            product_id,
+            min_date=prediction_start,
+            max_date=prediction_end
+        )
 
         return [
             {"name": "Historical Sales", "series": historical},
@@ -191,9 +225,9 @@ class DemoDashboardService:
         ]
     
     @staticmethod
-    def get_top_product_comparison(limit=10):
+    def get_top_product_comparison(product_id=None, limit=10):
         """Get top products by comparing current vs predicted sales (current year)."""
-        current_year = datetime.now().year
+        current_year = DemoDashboardService._get_latest_year()
 
         # ---- Historical (Current Year) ----
         historical_subq = (
@@ -203,8 +237,10 @@ class DemoDashboardService:
             )
             .filter(func.year(DemoSaleStats.report_date) == current_year)
             .group_by(DemoSaleStats.product_id)
-            .subquery()
         )
+        if product_id:
+            historical_subq = historical_subq.filter(DemoSaleStats.product_id == product_id)
+        historical_subq = historical_subq.subquery()
 
         # ---- Predicted (Current Year) ----
         predicted_subq = (
@@ -214,11 +250,13 @@ class DemoDashboardService:
             )
             .filter(func.year(MonthlySalesStatsPredicted.report_date) == current_year)
             .group_by(MonthlySalesStatsPredicted.product_id)
-            .subquery()
         )
+        if product_id:
+            predicted_subq = predicted_subq.filter(MonthlySalesStatsPredicted.product_id == product_id)
+        predicted_subq = predicted_subq.subquery()
 
         # ---- Join Both + Product Names ----
-        results = (
+        query = (
             db.session.query(
                 Products.product_name,
                 func.coalesce(historical_subq.c.current_sales, 0).label("current_sales"),
@@ -226,6 +264,13 @@ class DemoDashboardService:
             )
             .outerjoin(historical_subq, historical_subq.c.product_id == Products.product_id)
             .outerjoin(predicted_subq, predicted_subq.c.product_id == Products.product_id)
+        )
+
+        if product_id:
+            query = query.filter(Products.product_id == product_id)
+
+        results = (
+            query
             .order_by(func.coalesce(predicted_subq.c.predicted_sales, 0).desc())  # sort by predicted
             .limit(limit)
             .all()
@@ -242,7 +287,6 @@ class DemoDashboardService:
             }
             for r in results
         ]
-        #print(formatted)
         return formatted
     
     def get_total_actual_vs_predicted(product_id=None):
@@ -252,7 +296,7 @@ class DemoDashboardService:
         Output format: ngx-charts bar chart compatible.
         """
 
-        current_year = datetime.now().year
+        current_year = DemoDashboardService._get_latest_year()
 
         # ---- Total Actual ----
         actual_query = (
@@ -306,7 +350,7 @@ class DemoDashboardService:
             ...
         ]
         """
-        current_year = datetime.now().year
+        current_year = DemoDashboardService._get_latest_year()
         previous_year = current_year - 1
 
         # 1️⃣ Sum historical sales for current and previous year
@@ -386,7 +430,11 @@ class DemoDashboardService:
         - backlog count (static 0)
         - confidence score (prediction accuracy)
         """
-        today = datetime.now()
+        latest_date = db.session.query(func.max(DemoSaleStats.report_date)).scalar()
+        if not latest_date:
+            latest_date = datetime.now()
+            
+        today = latest_date
         current_month_start = datetime(today.year, today.month, 1)
         # Previous month
         prev_month_end = current_month_start - timedelta(days=1)

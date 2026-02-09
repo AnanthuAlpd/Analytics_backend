@@ -58,6 +58,8 @@ def create_app():
     app.register_blueprint(speciality_bp, url_prefix='/api/aswims')
     app.register_blueprint(user_bp,url_prefix='/api/aswims')
     app.register_blueprint(patient_bp,url_prefix='/api/aswims')
+    app.register_blueprint(expense_bp, url_prefix='/api')
+    app.register_blueprint(business_analytics_bp, url_prefix='/api')
 
      # 🔴 DEBUG: PRINT ROUTESu
     # print("\n=== REGISTERED ROUTES ===")

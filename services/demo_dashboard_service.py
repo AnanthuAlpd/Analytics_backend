@@ -336,89 +336,47 @@ class DemoDashboardService:
 
 
     @staticmethod
-    def get_product_growth_performance(top_n: int = 6):
+    def get_product_growth_performance(product_id=None):
         """
-        Returns product growth performance in ngx-charts grouped-series format:
+        Returns product growth performance (YoY) in ngx-charts bar chart format.
+        If product_id is provided, returns growth for that specific product.
+        Otherwise, returns total growth for all products.
         [
-            {
-                "name": "Smartphone X1",
-                "series": [
-                    { "name": "Historical Growth", "value": 20.5 },
-                    { "name": "Predicted Growth", "value": 15.8 }
-                ]
-            },
-            ...
+            { "name": "Historical Growth", "value": <float> },
+            { "name": "Current Growth", "value": <float> }
         ]
         """
         current_year = DemoDashboardService._get_latest_year()
-        previous_year = current_year - 1
+        prev_year = current_year - 1
+        prev_prev_year = current_year - 2
 
-        # 1️⃣ Sum historical sales for current and previous year
-        historical_current = db.session.query(
-            DemoSaleStats.product_id,
-            func.sum(DemoSaleStats.total_quantity_sold).label('current_sales')
-        ).filter(func.year(DemoSaleStats.report_date) == current_year
-        ).group_by(DemoSaleStats.product_id).subquery()
+        def get_total_sales(year, p_id=None):
+            query = db.session.query(func.sum(DemoSaleStats.total_quantity_sold)) \
+                              .filter(func.year(DemoSaleStats.report_date) == year)
+            if p_id:
+                query = query.filter(DemoSaleStats.product_id == p_id)
+            return float(query.scalar() or 0)
 
-        historical_previous = db.session.query(
-            DemoSaleStats.product_id,
-            func.sum(DemoSaleStats.total_quantity_sold).label('previous_sales')
-        ).filter(func.year(DemoSaleStats.report_date) == previous_year
-        ).group_by(DemoSaleStats.product_id).subquery()
+        # Sales for current, previous, and year before that
+        sales_curr = get_total_sales(current_year, product_id)
+        sales_prev = get_total_sales(prev_year, product_id)
+        sales_prev_prev = get_total_sales(prev_prev_year, product_id)
 
-        # 2️⃣ Sum predicted sales for current year
-        predicted_sales = db.session.query(
-            MonthlySalesStatsPredicted.product_id,
-            func.sum(MonthlySalesStatsPredicted.forecasted_quantity).label('predicted_sales')
-        ).filter(func.year(MonthlySalesStatsPredicted.report_date) == current_year
-        ).group_by(MonthlySalesStatsPredicted.product_id).subquery()
+        # Calculate Growth Rates
+        # Current Growth: (Current Year vs Previous Year)
+        current_growth = 0
+        if sales_prev > 0:
+            current_growth = ((sales_curr - sales_prev) / sales_prev) * 100
 
-        # 3️⃣ Join with product table
-        query = db.session.query(
-            Products.product_name,
-            historical_current.c.current_sales,
-            historical_previous.c.previous_sales,
-            predicted_sales.c.predicted_sales
-        ).outerjoin(
-            historical_current, Products.product_id == historical_current.c.product_id
-        ).outerjoin(
-            historical_previous, Products.product_id == historical_previous.c.product_id
-        ).outerjoin(
-            predicted_sales, Products.product_id == predicted_sales.c.product_id
-        )
+        # Historical Growth: (Previous Year vs Year Before That)
+        historical_growth = 0
+        if sales_prev_prev > 0:
+            historical_growth = ((sales_prev - sales_prev_prev) / sales_prev_prev) * 100
 
-        result = []
-        for row in query.all():
-            # Convert Decimal to float
-            current_sales = float(row.current_sales or 0)
-            previous_sales = float(row.previous_sales or 0)
-            predicted_sales_value = float(row.predicted_sales or 0)
-
-            # Historical YoY Growth %
-            if previous_sales != 0:
-                historical_growth = (current_sales - previous_sales) / previous_sales * 100
-            else:
-                historical_growth = 0
-
-            # Predicted Growth %
-            if current_sales != 0:
-                predicted_growth = (predicted_sales_value - current_sales) / current_sales * 100
-            else:
-                predicted_growth = 0
-
-            # Map to ngx-charts grouped-series format
-            result.append({
-                "name": row.product_name,
-                "series": [
-                    { "name": "Historical Growth", "value": round(historical_growth, 2) },
-                    { "name": "Predicted Growth", "value": round(predicted_growth, 2) }
-                ]
-            })
-
-        # Sort by historical growth descending and limit top N
-        result = sorted(result, key=lambda x: x['series'][0]['value'], reverse=True)[:top_n]
-
-        return result
+        return [
+            {"name": "Historical Growth", "value": round(historical_growth, 2)},
+            {"name": "Current Growth", "value": round(current_growth, 2)}
+        ]
     
     @staticmethod
     def get_forecast_summary(top_n: int = 6):

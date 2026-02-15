@@ -192,12 +192,12 @@ class BusinessAnalyticsService:
                 db.session.query(
                     Products.product_name,
                     func.sum(case(
-                        (func.month(DemoSaleStats.report_date) == current_month.month, 
+                        (func.month(DemoSaleStats.report_date) == current_month_date.month, 
                          DemoSaleStats.total_quantity_sold),
                         else_=0
                     )).label('current_sales'),
                     func.sum(case(
-                        (func.month(DemoSaleStats.report_date) == prev_month.month, 
+                        (func.month(DemoSaleStats.report_date) == prev_month_date.month, 
                          DemoSaleStats.total_quantity_sold),
                         else_=0
                     )).label('prev_sales')
@@ -206,7 +206,7 @@ class BusinessAnalyticsService:
                 .filter(func.year(DemoSaleStats.report_date) == current_year)
                 .group_by(Products.product_name)
                 .having(func.sum(case(
-                    (func.month(DemoSaleStats.report_date) == prev_month.month, 
+                    (func.month(DemoSaleStats.report_date) == prev_month_date.month, 
                      DemoSaleStats.total_quantity_sold),
                     else_=0
                 )) > 0)

@@ -120,6 +120,26 @@ def get_total_product_comparison():
         )
 
 
+@demo_dashboard_bp.route('/demo-dashboard/top-10-product-growth', methods=['GET'])
+def get_top_10_product_growth():
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        result = DemoDashboardService.get_top_10_product_growth(limit)
+        return BaseService.create_response(
+            data=result,
+            message="Top 10 product growth data fetched successfully",
+            status="success",
+            code=200
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Server error: {str(e)}")
+        return BaseService.create_response(
+            message="Internal server error",
+            status="error",
+            code=500
+        )
+
 @demo_dashboard_bp.route('/demo-dashboard/product-growth', methods=['GET'])
 def get_product_growth_performance():
     try:

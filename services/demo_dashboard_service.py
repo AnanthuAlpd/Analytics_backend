@@ -468,3 +468,68 @@ class DemoDashboardService:
         result = sorted(result, key=lambda x: x['current_month_sales'], reverse=True)[:top_n]
 
         return result
+
+    @staticmethod
+    def get_top_10_product_growth(limit=10):
+        """
+        Returns top 10 products by growth for a multiseries bar chart.
+        Metrics:
+        - Current Growth: (2025 Actual vs 2024 Actual)
+        - Predicted Growth: (2026 Predicted vs 2025 Actual)
+        """
+        current_year = DemoDashboardService._get_latest_year()
+        prev_year = current_year - 1
+        next_year = current_year + 1
+
+        # 1. Fetch sums for all products for a given year
+        def get_year_sums(model, value_col, date_col, target_year):
+            return db.session.query(
+                model.product_id,
+                func.sum(value_col).label('total')
+            ).filter(
+                func.year(date_col) == target_year
+            ).group_by(model.product_id).all()
+
+        rows_2024 = get_year_sums(DemoSaleStats, DemoSaleStats.total_quantity_sold, DemoSaleStats.report_date, prev_year)
+        rows_2025 = get_year_sums(DemoSaleStats, DemoSaleStats.total_quantity_sold, DemoSaleStats.report_date, current_year)
+        rows_2026 = get_year_sums(MonthlySalesStatsPredicted, MonthlySalesStatsPredicted.forecasted_quantity, MonthlySalesStatsPredicted.report_date, next_year)
+        
+        # 2. Map to dictionaries {product_id: total}
+        map_2024 = {r.product_id: float(r.total or 0) for r in rows_2024}
+        map_2025 = {r.product_id: float(r.total or 0) for r in rows_2025}
+        map_2026 = {r.product_id: float(r.total or 0) for r in rows_2026}
+
+        # 3. Get all product names
+        products = db.session.query(Products.product_id, Products.product_name).all()
+        
+        results = []
+        for p in products:
+            pid = p.product_id
+            v24 = map_2024.get(pid, 0.0)
+            v25 = map_2025.get(pid, 0.0)
+            v26 = map_2026.get(pid, 0.0)
+
+            # Calculate growth
+            cur_growth = ((v25 - v24) / v24 * 100) if v24 > 0 else 0.0
+            pred_growth = ((v26 - v25) / v25 * 100) if v25 > 0 else 0.0
+
+            results.append({
+                "name": p.product_name,
+                "current_growth": cur_growth,
+                "series": [
+                    {"name": "Current Growth", "value": round(cur_growth, 2)},
+                    {"name": "Predicted Growth", "value": round(pred_growth, 2)}
+                ]
+            })
+
+        # 4. Sort by Current Growth Descending and slice
+        # The user wanted a multiseries bar chart.
+        # "same as get_product_growth_performance function but here i want top 10 products"
+        results = sorted(results, key=lambda x: x['current_growth'], reverse=True)[:limit]
+
+        final_output = [
+            {"name": r["name"], "series": r["series"]} 
+            for r in results
+        ]
+        
+        return final_output

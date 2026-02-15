@@ -14,16 +14,15 @@ def test_growth_api(product_id=None):
         print(f"Status Code: {resp.status_code}")
         if resp.status_code == 200:
             data = resp.json().get('data', [])
-            print("Data Received:")
-            print(json.dumps(data, indent=2))
+            print(f"Data Received: {json.dumps(data, indent=2)}")
             
-            # Check format
-            expected_names = {"Historical Growth", "Current Growth"}
+            # Check format: Expecting exactly 2 objects
+            expected_names = {"Current Growth", "Predicted Growth"}
             actual_names = {item['name'] for item in data}
-            if actual_names == expected_names:
-                print("✅ Data format is correct.")
+            if actual_names == expected_names and len(data) == 2:
+                print(f"✅ Data format (Flat Consolidated with 2 metrics) is correct.")
             else:
-                print(f"❌ Unexpected data format: {actual_names}")
+                print(f"❌ Unexpected metrics or count: {actual_names}")
         else:
             print(f"❌ Error Response: {resp.text}")
     except Exception as e:

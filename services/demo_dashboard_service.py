@@ -338,44 +338,36 @@ class DemoDashboardService:
     @staticmethod
     def get_product_growth_performance(product_id=None):
         """
-        Returns product growth performance (YoY) in ngx-charts bar chart format.
-        If product_id is provided, returns growth for that specific product.
-        Otherwise, returns total growth for all products.
-        [
-            { "name": "Historical Growth", "value": <float> },
-            { "name": "Current Growth", "value": <float> }
-        ]
+        Returns consolidated product growth performance (YoY) in a flat format.
+        Matches the output structure of product-comparison-total.
+        Metrics:
+        - Current Growth: (2025 Actual vs 2024 Actual)
+        - Predicted Growth: (2026 Predicted vs 2025 Actual)
         """
         current_year = DemoDashboardService._get_latest_year()
         prev_year = current_year - 1
-        prev_prev_year = current_year - 2
+        next_year = current_year + 1
 
-        def get_total_sales(year, p_id=None):
-            query = db.session.query(func.sum(DemoSaleStats.total_quantity_sold)) \
-                              .filter(func.year(DemoSaleStats.report_date) == year)
+        def get_val(model, column, year, p_id):
+            query = db.session.query(func.sum(column)) \
+                              .filter(func.year(model.report_date) == year)
             if p_id:
-                query = query.filter(DemoSaleStats.product_id == p_id)
+                query = query.filter(model.product_id == p_id)
             return float(query.scalar() or 0)
 
-        # Sales for current, previous, and year before that
-        sales_curr = get_total_sales(current_year, product_id)
-        sales_prev = get_total_sales(prev_year, product_id)
-        sales_prev_prev = get_total_sales(prev_prev_year, product_id)
+        # 1. Fetch sales for relevant years
+        s_2024 = get_val(DemoSaleStats, DemoSaleStats.total_quantity_sold, prev_year, product_id)
+        s_2025 = get_val(DemoSaleStats, DemoSaleStats.total_quantity_sold, current_year, product_id)
+        s_2026_pred = get_val(MonthlySalesStatsPredicted, MonthlySalesStatsPredicted.forecasted_quantity, next_year, product_id)
 
-        # Calculate Growth Rates
-        # Current Growth: (Current Year vs Previous Year)
-        current_growth = 0
-        if sales_prev > 0:
-            current_growth = ((sales_curr - sales_prev) / sales_prev) * 100
+        # 2. Calculation Helper
+        def calc_growth(curr, prev):
+            return round(((curr - prev) / prev * 100), 2) if prev > 0 else 0.0
 
-        # Historical Growth: (Previous Year vs Year Before That)
-        historical_growth = 0
-        if sales_prev_prev > 0:
-            historical_growth = ((sales_prev - sales_prev_prev) / sales_prev_prev) * 100
-
+        # 3. Format as flat list matching product-comparison-total
         return [
-            {"name": "Historical Growth", "value": round(historical_growth, 2)},
-            {"name": "Current Growth", "value": round(current_growth, 2)}
+            {"name": "Current Growth", "value": calc_growth(s_2025, s_2024)},
+            {"name": "Predicted Growth", "value": calc_growth(s_2026_pred, s_2025)}
         ]
     
     @staticmethod

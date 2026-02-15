@@ -123,12 +123,12 @@ def get_total_product_comparison():
 @demo_dashboard_bp.route('/demo-dashboard/product-growth', methods=['GET'])
 def get_product_growth_performance():
     try:
-        # Fetch KPI data without filters
-        #product_id = request.args.get('product_id', type=int)
-        result = DemoDashboardService.get_product_growth_performance()
+        # Fetch KPI data with optional product filter
+        product_id = request.args.get('product_id', type=int)
+        result = DemoDashboardService.get_product_growth_performance(product_id)
         return BaseService.create_response(
             data=result,
-            message="product growth performance data fetched successfully for line chart",
+            message="product growth performance data fetched successfully for bar chart",
             status="success",
             code=200
         )

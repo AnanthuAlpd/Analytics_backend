@@ -8,3 +8,4 @@ ENV/
 env/
 .venv/
 .vscode/
+db.py

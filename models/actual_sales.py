@@ -1,35 +1,28 @@
-from db import mysql
+from db import db
+from sqlalchemy import func, text
+from models.demo_sale_stats import DemoSaleStats
+from models.demo_products import Products
+from models.demo_predicted_sales import MonthlySalesStatsPredicted
 
 class ActualSales:
     @staticmethod
     def get_monthly_totals(product_id=None, months=None):
-        cur = mysql.connection.cursor()
-
-        query = """
-            SELECT 
-                DATE_FORMAT(report_date, '%%b %%Y') AS month,
-                SUM(total_quantity_sold) AS total_quantity_sold
-            FROM monthly_sales_stats
-            WHERE 1=1
-        """
-        params = []
-
-        if product_id:
-            query += " AND product_id = %s"
-            params.append(product_id)
-
-        if months:
-            query += " AND report_date >= DATE_SUB(CURDATE(), INTERVAL %s MONTH)"
-            params.append(months)
-
-        query += " GROUP BY report_date ORDER BY DATE_FORMAT(report_date, '%%Y-%%m')"
-
-        print(f"Executing query:\n{query} with parameters: {params}")
-
         try:
-            cur.execute(query, tuple(params))
-            results = cur.fetchall()
-            cur.close()
+            query = db.session.query(
+                func.date_format(DemoSaleStats.report_date, '%b %Y').label('month'),
+                func.sum(DemoSaleStats.total_quantity_sold).label('total_quantity_sold')
+            )
+
+            if product_id:
+                query = query.filter(DemoSaleStats.product_id == product_id)
+
+            if months:
+                # Using text for interval since SQLAlchemy doesn't support it directly in func widely for all dialects easily without text
+                query = query.filter(DemoSaleStats.report_date >= func.date_sub(func.curdate(), text(f'INTERVAL {months} MONTH')))
+
+            query = query.group_by(DemoSaleStats.report_date).order_by(func.date_format(DemoSaleStats.report_date, '%Y-%m'))
+            
+            results = query.all()
             return results
         except Exception as e:
             print(f"Error executing query: {e}")
@@ -39,52 +32,47 @@ class ActualSales:
     def to_dict(row):
         return {
             'type': 'actual',
-            'month': row['month'],
-            'total_quantity_sold': float(row['total_quantity_sold']) if row['total_quantity_sold'] else 0
+            'month': row.month,
+            'total_quantity_sold': float(row.total_quantity_sold) if row.total_quantity_sold else 0
         }
+
     @staticmethod
     def get_comparison_table():
-        cur = mysql.connection.cursor()
-
-        query = """
-                SELECT 
-    p.product_name,
-    p.product_id,
-    COALESCE(a.actual_sale_2022, 0) AS actual_sale_2022,
-    COALESCE(pf.predicted_sale_2023, 0) AS predicted_sale_2023
-FROM product p
-LEFT JOIN (
-    SELECT 
-        product_id,
-        SUM(total_quantity_sold) AS actual_sale_2022
-    FROM monthly_sales_stats
-    WHERE YEAR(report_date) = 2022
-    GROUP BY product_id
-) a ON p.product_id = a.product_id
-LEFT JOIN (
-    SELECT 
-        product_id,
-        SUM(forecasted_quantity) AS predicted_sale_2023
-    FROM monthly_sales_stats_predicted
-    GROUP BY product_id
-) pf ON p.product_id = pf.product_id
-WHERE p.product_id NOT IN (51, 52, 53)
-ORDER BY p.product_id
-        """
-
         try:
-            cur.execute(query)
-            results = cur.fetchall()
-            cur.close()
+            # Subquery for Actual Sales 2022
+            sq_actual = db.session.query(
+                DemoSaleStats.product_id,
+                func.sum(DemoSaleStats.total_quantity_sold).label('actual_sale_2022')
+            ).filter(func.year(DemoSaleStats.report_date) == 2022)\
+             .group_by(DemoSaleStats.product_id).subquery()
+
+            # Subquery for Predicted Sales 2023
+            sq_predicted = db.session.query(
+                MonthlySalesStatsPredicted.product_id,
+                func.sum(MonthlySalesStatsPredicted.forecasted_quantity).label('predicted_sale_2023')
+            ).group_by(MonthlySalesStatsPredicted.product_id).subquery()
+
+            # Main Query
+            results = db.session.query(
+                Products.product_name,
+                Products.product_id,
+                func.coalesce(sq_actual.c.actual_sale_2022, 0).label('actual_sale_2022'),
+                func.coalesce(sq_predicted.c.predicted_sale_2023, 0).label('predicted_sale_2023')
+            ).outerjoin(sq_actual, Products.product_id == sq_actual.c.product_id)\
+             .outerjoin(sq_predicted, Products.product_id == sq_predicted.c.product_id)\
+             .filter(Products.product_id.notin_([51, 52, 53]))\
+             .order_by(Products.product_id).all()
+
             return [
                 {
-                    "product_id": row["product_id"],
-                    "product_name": row["product_name"],
-                    "actual_sale_2022": float(row["actual_sale_2022"] or 0),
-                    "predicted_sale_2023": round(float(row["predicted_sale_2023"] or 0), 2)
+                    "product_id": row.product_id,
+                    "product_name": row.product_name,
+                    "actual_sale_2022": float(row.actual_sale_2022 or 0),
+                    "predicted_sale_2023": round(float(row.predicted_sale_2023 or 0), 2)
                 }
                 for row in results
             ]
+
         except Exception as e:
             print(f"Error fetching comparison table: {e}")
             raise

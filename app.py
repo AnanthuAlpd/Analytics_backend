@@ -1,5 +1,5 @@
 from datetime import timedelta
-from flask import Flask
+from flask import Flask, render_template
 from flask_cors import CORS
 from db import init_db
 from flask_jwt_extended import JWTManager
@@ -67,4 +67,10 @@ def create_app():
     #     print(rule)
     # print("========================\n")
     import models
+
+
+    @app.route('/')
+    def home():
+        return render_template('index.html')
+
     return app

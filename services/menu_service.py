@@ -39,8 +39,13 @@ class MenuService:
     
    @staticmethod
    def get_menus_by_roles(role_ids: list[int]):
+        # Fallback for unauthenticated / direct link users
         if not role_ids:
-            return []
+            guest_role = Role.query.filter_by(name='Guest User').first()
+            if guest_role:
+                role_ids = [guest_role.id]
+            else:
+                return []
 
         results = (
             db.session.query(Menu)

@@ -5,9 +5,8 @@ from models.menus import Menu
 class RoleMenu(db.Model):
     __tablename__ = 'role_menus'
 
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), nullable=False)
-    menu_id = db.Column(db.Integer, db.ForeignKey('menus.id'), nullable=False)
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), primary_key=True, nullable=False)
+    menu_id = db.Column(db.Integer, db.ForeignKey('menus.id'), primary_key=True, nullable=False)
 
     role = db.relationship('Role', backref=db.backref('role_menus', lazy=True))
     menu = db.relationship('Menu', backref=db.backref('role_menus', lazy=True))

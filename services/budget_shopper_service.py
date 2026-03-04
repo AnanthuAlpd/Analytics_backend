@@ -103,12 +103,29 @@ class BudgetShopperService(BaseService):
                     shopping_list.append(item)
                     total_cost += item['subtotal']
 
+            # Generate demo trends based on the current math to populate the sparklines
+            # We simulate a "build-up" of the budget over 7 steps for the sparkline visual
+            steps = 7
+            investment_trend = []
+            budget_trend = []
+            items_trend = []
+            
+            # Simple simulation: spread the total cost and items across the 7 points
+            for i in range(1, steps + 1):
+                multiplier = i / steps
+                investment_trend.append(round(total_cost * multiplier, 2))
+                budget_trend.append(round(budget - (total_cost * multiplier), 2))
+                items_trend.append(int(len(shopping_list) * multiplier))
+
             response_data = {
                 'budget_provided': budget,
                 'months_coverage': months,
                 'total_investment': total_cost,
                 'remaining_budget': current_budget,
-                'shopping_list': shopping_list
+                'shopping_list': shopping_list,
+                'investment_trend': investment_trend,
+                'budget_trend': budget_trend,
+                'items_trend': items_trend
             }
             
             return BaseService.create_response(data=response_data, message="Budget optimized successfully")

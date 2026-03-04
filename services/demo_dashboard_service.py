@@ -55,10 +55,29 @@ class DemoDashboardService:
                 'monthly_avg_backorder':monthly_avg_backorder,
                 'predictionAccuracy': accuracy
             }
-            # 3. Round all float values to 2 decimals for clean API output
-            for key, value in kpi_summary.items():
-                if isinstance(value, float):
-                    kpi_summary[key] = round(value, 2)
+            # --- 4. Sparkline Trend Data (Last 6 Months Sales) ---
+            # Fetch the actual sales trend for the last 6 months to display in the Predicted Sales sparkline
+            trend_end_date = db.session.query(func.max(DemoSaleStats.report_date)).scalar() or datetime.now()
+            trend_start_date = trend_end_date - timedelta(days=6 * 30)
+            
+            trend_data = (
+                db.session.query(
+                    func.date_format(DemoSaleStats.report_date, '%Y-%m').label('month'),
+                    func.sum(DemoSaleStats.total_quantity_sold * Products.sale_price).label('revenue')
+                )
+                .join(Products, DemoSaleStats.product_id == Products.product_id)
+                .filter(DemoSaleStats.report_date >= trend_start_date)
+                .group_by('month')
+                .order_by('month')
+                .all()
+            )
+            
+            predicted_sales_trend = []
+            for row in trend_data:
+                predicted_sales_trend.append(round(float(row.revenue or 0), 2))
+                
+            kpi_summary['predicted_sales_trend'] = predicted_sales_trend
+
             return kpi_summary
         except Exception as e:
             current_app.logger.error(f"Error fetching KPI data: {str(e)}")

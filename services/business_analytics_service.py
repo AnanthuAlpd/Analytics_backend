@@ -68,6 +68,38 @@ class BusinessAnalyticsService:
             prev_revenue = float(prev_revenue_query.prev_revenue or 0)
             revenue_growth = ((total_revenue - prev_revenue) / prev_revenue * 100) if prev_revenue > 0 else 0
             
+            
+            # --- Sparkline Trend Data (Last 6 Months) ---
+            end_date = db.session.query(func.max(DemoSaleStats.report_date)).scalar() or datetime.now()
+            start_date_6m = end_date - timedelta(days=6 * 30)
+            
+            trend_data = (
+                db.session.query(
+                    func.date_format(DemoSaleStats.report_date, '%Y-%m').label('month'),
+                    func.sum(DemoSaleStats.total_quantity_sold * Products.sale_price).label('revenue'),
+                    func.sum(DemoSaleStats.total_quantity_sold * Products.cost_price).label('cost'),
+                    func.count(DemoSaleStats.stats_id).label('transactions')
+                )
+                .join(Products, DemoSaleStats.product_id == Products.product_id)
+                .filter(DemoSaleStats.report_date >= start_date_6m)
+                .group_by('month')
+                .order_by('month')
+                .all()
+            )
+            
+            revenue_trend = []
+            profit_trend = []
+            aov_trend = []
+            
+            for row in trend_data:
+                rev = float(row.revenue or 0)
+                cost = float(row.cost or 0)
+                trans = int(row.transactions or 1)
+                
+                revenue_trend.append(round(rev, 2))
+                profit_trend.append(round(rev - cost, 2))
+                aov_trend.append(round(rev / trans if trans > 0 else 0, 2))
+                
             return {
                 'total_revenue': round(total_revenue, 2),
                 'total_cost': round(total_cost, 2),
@@ -75,7 +107,10 @@ class BusinessAnalyticsService:
                 'profit_margin': round(profit_margin, 2),
                 'avg_order_value': round(avg_order_value, 2),
                 'total_units_sold': total_units,
-                'revenue_growth_yoy': round(revenue_growth, 2)
+                'revenue_growth_yoy': round(revenue_growth, 2),
+                'revenue_trend': revenue_trend,
+                'profit_trend': profit_trend,
+                'aov_trend': aov_trend
             }
             
         except Exception as e:

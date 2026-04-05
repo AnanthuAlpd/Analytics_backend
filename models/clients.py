@@ -21,6 +21,8 @@ class Client(db.Model):
         default=datetime.utcnow,
         onupdate=datetime.utcnow
     )
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
+    role = db.relationship('Role', backref='clients') 
     service = db.relationship('Service', backref='clients')
     ref_emp=db.relationship('Employee', backref="clients")
 
@@ -41,5 +43,6 @@ class Client(db.Model):
             "service_name": self.service.name,
             "ref_emp_name":self.ref_emp.name,
             "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat()
+            "updated_at": self.updated_at.isoformat(),
+            "roles": [{"id": self.role.id, "name": self.role.name}] if self.role else None
         }

@@ -47,13 +47,14 @@ class AuthService(BaseService):
                     "user_type": "EMPLOYEE",
                     "user": user.to_dict()
                 },
-                message="Login successful"
+                message="Login successful for Employee with id "
             )
 
         # CLIENT
         elif user_record.user_type == 'CLIENT':
             user = Client.query.options(
-                db.joinedload(Client.service)
+                db.joinedload(Client.service),
+                db.joinedload(Client.role)
             ).get(user_record.user_id)
 
             if not user or not user.check_password(password):
@@ -65,14 +66,9 @@ class AuthService(BaseService):
                     "access_token": access_token,
                     "refresh_token": refresh_token,
                     "user_type": "CLIENT",
-                    "user": {
-                        "id": user.client_id,
-                        "name": user.name,
-                        "email": user.email,
-                        "service_name": user.service.name
-                    }
+                    "user": user.to_dict()
                 },
-                message="Login successful"
+                message="Login successful for Client"
             )
 
     @staticmethod

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, extract
 from db import db
 from models.leads import Lead
+from models.lead_activity_logs import LeadActivityLog
 
 def create_lead(data, emp_id):
     try:
@@ -17,6 +18,10 @@ def create_lead(data, emp_id):
         )
         db.session.add(lead)
         db.session.commit()
+        
+        # Log activity
+        log_lead_activity(lead.id, emp_id, 'Lead Created', 'Lead was successfully added.')
+        
         return {"message": "Lead created successfully", "lead_id": lead.id}, 201
 
     except Exception as e:
@@ -120,3 +125,104 @@ def get_all_leads_service():
         return lead_list
     except Exception as e:
         raise Exception(str(e))
+
+def log_lead_activity(lead_id, emp_id, action_type, details, old_val=None, new_val=None):
+    """Utility to log lead activities."""
+    try:
+        log = LeadActivityLog(
+            lead_id=lead_id,
+            emp_id=emp_id,
+            action_type=action_type,
+            details=details,
+            old_value=old_val,
+            new_value=new_val
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error logging activity: {str(e)}")
+
+def update_lead_service(lead_id, data, current_emp_id):
+    """Updates a lead and logs status changes."""
+    try:
+        lead = Lead.query.get(lead_id)
+        if not lead:
+            return {"error": "Lead not found"}, 404
+
+        old_status = lead.status
+        new_status = data.get('status')
+
+        # Update fields
+        lead.name = data.get('name', lead.name)
+        lead.lead_cat = data.get('lead_cat', lead.lead_cat)
+        lead.email = data.get('email', lead.email)
+        lead.mob_no = data.get('mob_no', lead.mob_no)
+        lead.lead_source = data.get('lead_source', lead.lead_source)
+        lead.status = new_status if new_status else lead.status
+        lead.remarks = data.get('remarks', lead.remarks)
+        lead.follow_up_date = data.get('follow_up_date', lead.follow_up_date)
+
+        # Log status change if applicable
+        if new_status and old_status != new_status:
+            log_lead_activity(
+                lead_id, 
+                current_emp_id, 
+                'Status Change', 
+                f'Status updated from {old_status} to {new_status}', 
+                old_status, 
+                new_status
+            )
+        
+        # Log other updates if needed (e.g., Note Added)
+        elif data.get('remarks') and data.get('remarks') != lead.remarks:
+             log_lead_activity(lead_id, current_emp_id, 'Note Added', 'Remarks updated.')
+
+        db.session.commit()
+        return {"message": "Lead updated successfully"}, 200
+
+    except Exception as e:
+        db.session.rollback()
+        return {"error": str(e)}, 500
+
+def add_lead_note_service(lead_id, emp_id, details):
+    """Records a manual note and syncs it with the lead's main remarks."""
+    try:
+        # 1. Record the note in activities
+        log_lead_activity(
+            lead_id=lead_id,
+            emp_id=emp_id,
+            action_type='Note Added',
+            details=details
+        )
+
+        # 2. Sync the latest remark back to the main 'leads' table
+        lead = Lead.query.get(lead_id)
+        if lead:
+            lead.remarks = details
+            db.session.commit()
+
+        return {"message": "Note recorded and synced successfully"}, 201
+
+    except Exception as e:
+        db.session.rollback()
+        return {"error": str(e)}, 500
+
+def get_lead_activities_service(lead_id):
+    """Fetches activity timeline for a lead."""
+    try:
+        activities = LeadActivityLog.query.filter_by(lead_id=lead_id).order_by(LeadActivityLog.created_at.desc()).all()
+        return [
+            {
+                "id": act.id,
+                "action_type": act.action_type,
+                "details": act.details,
+                "old_value": act.old_value,
+                "new_value": act.new_value,
+                "created_at": act.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                "emp_name": act.employee.name if act.employee else "Unknown"
+            }
+            for act in activities
+        ], 200
+    except Exception as e:
+        return {"error": str(e)}, 500

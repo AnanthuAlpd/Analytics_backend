@@ -1,5 +1,12 @@
 from flask import Blueprint, request, jsonify
-from services.leads_service import create_lead,get_leads_dashboard_stats,get_all_leads_service
+from services.leads_service import (
+    create_lead, 
+    get_leads_dashboard_stats, 
+    get_all_leads_service,
+    update_lead_service,
+    add_lead_note_service,
+    get_lead_activities_service
+)
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from services.base_service import BaseService
 
@@ -11,6 +18,37 @@ def add_lead():
     data = request.json
     emp_id = get_jwt_identity() 
     result, status_code = create_lead(data, emp_id)
+    return jsonify(result), status_code
+
+@leads_bp.route('/leads/activities/add', methods=['POST'])
+@jwt_required()
+def add_note():
+    data = request.json
+    current_emp_id = get_jwt_identity()
+    
+    # Validate input
+    if not data.get('lead_id') or not data.get('details'):
+        return jsonify({"error": "lead_id and details are required"}), 400
+        
+    result, status_code = add_lead_note_service(
+        lead_id=data['lead_id'],
+        emp_id=current_emp_id,
+        details=data['details']
+    )
+    return jsonify(result), status_code
+
+@leads_bp.route('/leads/update/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_lead(id):
+    data = request.json
+    current_emp_id = get_jwt_identity()
+    result, status_code = update_lead_service(id, data, current_emp_id)
+    return jsonify(result), status_code
+
+@leads_bp.route('/leads/<int:id>/activities', methods=['GET'])
+@jwt_required()
+def get_lead_activities(id):
+    result, status_code = get_lead_activities_service(id)
     return jsonify(result), status_code
 
 @leads_bp.route('/leads/get-leads-byEmplId', methods=['GET'])

@@ -7,8 +7,9 @@ from services.leads_service import (
     add_lead_note_service,
     get_lead_activities_service
 )
-from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from services.base_service import BaseService
+from models.employee import Employee
 
 leads_bp = Blueprint('leads', __name__)
 
@@ -59,8 +60,18 @@ def get_lead_by_employee_id():
     return jsonify(result),status_code
 
 @leads_bp.route('/leads/getall', methods=['GET'])
+@jwt_required()
 def get_all_leads():
     try:
+        claims = get_jwt()
+        if claims.get("user_type") != "EMPLOYEE":
+            return BaseService.create_response(message="Access denied.", status="error", code=403)
+
+        user_id = get_jwt_identity()
+        user = Employee.query.get(user_id)
+        
+        if not user:
+            return BaseService.create_response(message="User not found", status="error", code=404)
         data = get_all_leads_service()
         return BaseService.create_response(data=data, message="All leads fetched successfully")
     except Exception as e:

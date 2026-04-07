@@ -111,6 +111,7 @@ def get_all_leads_service():
             {
                 "id": lead.id,
                 "emp_id": lead.emp_id,
+                "emp_name": lead.employee.name if lead.employee else "Unknown",
                 "name": lead.name,
                 "lead_cat": lead.lead_cat,
                 "email": lead.email,

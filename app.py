@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, json, jsonify
 from flask_cors import CORS
 from db import init_db
 from flask_jwt_extended import JWTManager
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 # Import controllers
@@ -25,11 +26,11 @@ from controllers.aswims.patient_controller import patient_bp
 from controllers.aswims.appointment_controller import appointments_bp
 from controllers.aswims.specialities_controller import speciality_bp
 from controllers.visitor_controller import visitor_bp
-#print("🔥 LOADED app.py FROM:", __file__)
+# Import controllers
 def create_app():
     app = Flask(__name__)
-    #print("🔥 create_app() CALLED")
-    #CORS(app, supports_credentials=True)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+    
     CORS(app, origins=['http://localhost:4200', 'http://127.0.0.1:5500', 'http://localhost:5500', 'http://pothansai.com', 'https://www.pothansai.com', 'http://www.pothansai.com', 'https://pothansai.com'])
     init_db(app)
 
@@ -53,10 +54,6 @@ def create_app():
     jwt = JWTManager(app)
 
     # Register blueprints
-    #app.register_blueprint(user_bp, url_prefix='/api')
-    #app.register_blueprint(monthly_stats_bp)
-    #app.register_blueprint(monthly_stats_predicted_bp)
-    #app.register_blueprint(sales_chart_bp)
     app.register_blueprint(api_root_bp, url_prefix='/api') # Adjust prefix as needed
     app.register_blueprint(sales_chart_bp, url_prefix='/api')
     app.register_blueprint(product_bp, url_prefix='/api')
@@ -79,11 +76,6 @@ def create_app():
     app.register_blueprint(budget_shopper_bp, url_prefix='/api')
     app.register_blueprint(visitor_bp, url_prefix='/api')
 
-     # 🔴 DEBUG: PRINT ROUTESu
-    # print("\n=== REGISTERED ROUTES ===")
-    # for rule in app.url_map.iter_rules():
-    #     print(rule)
-    # print("========================\n")
     import models
 
 

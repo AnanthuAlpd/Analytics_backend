@@ -12,11 +12,17 @@ def get_visitor_count():
     Detects IP automatically.
     """
     try:
-        # Get IP address, handling potential proxy headers
-        if request.headers.getlist("X-Forwarded-For"):
-            ip_address = request.headers.getlist("X-Forwarded-For")[0]
-        else:
-            ip_address = request.remote_addr
+        # Enhanced IP Detection
+        # Check standard and Cloudflare headers
+        ip_address = (
+            request.headers.get('CF-Connecting-IP') or
+            request.headers.get('X-Real-IP') or
+            (request.headers.getlist("X-Forwarded-For")[0] if request.headers.getlist("X-Forwarded-For") else None) or
+            request.remote_addr
+        )
+
+        # Log for debugging (will show in flask logs)
+        current_app.logger.info(f"Visitor Tracking - Detected IP: {ip_address} | Headers: {dict(request.headers)}")
 
         # Record visit and get updated count
         count = VisitorService.record_visit(ip_address)

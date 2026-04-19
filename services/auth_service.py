@@ -39,6 +39,9 @@ class AuthService(BaseService):
             if not user or not user.check_password(password):
                 return BaseService.create_response(message="Invalid email or password", status="error", code=401)
 
+            if getattr(user, 'is_deleted', False):
+                return BaseService.create_response(message="you are unauthorise contact admin", status="error", code=403)
+
             access_token, refresh_token = BaseService.generate_tokens(user.id, "EMPLOYEE")
             return BaseService.create_response(
                 data={
@@ -59,6 +62,9 @@ class AuthService(BaseService):
 
             if not user or not user.check_password(password):
                 return BaseService.create_response(message="Invalid email or password", status="error", code=401)
+
+            if getattr(user, 'is_deleted', False):
+                return BaseService.create_response(message="you are unauthorise contact admin", status="error", code=403)
 
             access_token, refresh_token = BaseService.generate_tokens(user.client_id, "CLIENT")
             return BaseService.create_response(
@@ -84,6 +90,9 @@ class AuthService(BaseService):
         if not user:
              return {"message": "User instance error", "status": "error", "code": 500}
 
+        if getattr(user, 'is_deleted', False):
+             return {"message": "you are unauthorise contact admin", "status": "error", "code": 403}
+
         db_mobile = None
         if user_record.user_type == 'EMPLOYEE':
             db_mobile = user.mob_no
@@ -107,6 +116,9 @@ class AuthService(BaseService):
 
         user = AuthService._get_user_instance(user_record)
         
+        if getattr(user, 'is_deleted', False):
+             return {"message": "you are unauthorise contact admin", "status": "error", "code": 403}
+
         # ... (Password setting logic remains the same) ...
         user.set_password(new_password)
         

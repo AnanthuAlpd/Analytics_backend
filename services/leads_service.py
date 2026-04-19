@@ -3,17 +3,25 @@ from sqlalchemy import func, extract
 from db import db
 from models.leads import Lead
 from models.lead_activity_logs import LeadActivityLog
+from models.lead_status import LeadStatus
+from models.lead_source import LeadSource
 
 def create_lead(data, emp_id):
     try:
+        # Validation
+        required_fields = ['name', 'email', 'lead_cat']
+        for field in required_fields:
+            if not data.get(field):
+                return {"error": f"Field '{field}' is required"}, 400
+
         lead = Lead(
             emp_id=emp_id,
             name=data.get('name'),
             lead_cat=data.get('lead_cat'),
             email=data.get('email'),
             mob_no=data.get('mob_no'),
-            lead_source=data.get('lead_source'),
-            status=data.get('status', 'New'),  # fallback to 'New' if not provided
+            lead_source_id=data.get('lead_source_id'),
+            status_id=data.get('status_id'),
             remarks=data.get('remarks')
         )
         db.session.add(lead)
@@ -72,8 +80,8 @@ def get_leads_dashboard_stats(emp_id=None):
                 Lead.mob_no,
                 Lead.created_at,
                 Lead.lead_cat,
-                Lead.status
-            ).filter(Lead.emp_id == emp_id).all()
+                LeadStatus.status_name
+            ).join(LeadStatus, Lead.status_id == LeadStatus.id, isouter=True).filter(Lead.emp_id == emp_id).all()
 
             # Convert to list of dicts
             emp_leads = [
@@ -84,7 +92,7 @@ def get_leads_dashboard_stats(emp_id=None):
                     "mob_no": lead.mob_no,
                     "created_at": lead.created_at.strftime('%Y-%m-%d'),
                     "lead_cat": lead.lead_cat,
-                    "status": lead.status
+                    "status": lead.status_name
                 }
                 for lead in emp_leads_query
             ]
@@ -116,10 +124,45 @@ def get_all_leads_service():
                 "lead_cat": lead.lead_cat,
                 "email": lead.email,
                 "mob_no": lead.mob_no,
-                "lead_source": lead.lead_source,
-                "status": lead.status,
+                "lead_source": lead.source_rel.source_name if lead.source_rel else None,
+                "status": lead.status_rel.status_name if lead.status_rel else None,
+                "lead_source_id": lead.lead_source_id,
+                "status_id": lead.status_id,
                 "remarks": lead.remarks,
                 "created_at": lead.created_at
+            }
+            for lead in leads
+        ]
+        return lead_list
+    except Exception as e:
+        raise Exception(str(e))
+
+def get_follow_up_leads_service(emp_id=None):
+    """Fetches all leads that currently have 'Follow-Up' status."""
+    try:
+        query = db.session.query(Lead).join(LeadStatus).filter(LeadStatus.status_name == 'Follow-Up')
+        
+        # Optional filter by employee if required
+        if emp_id:
+            query = query.filter(Lead.emp_id == emp_id)
+            
+        leads = query.all()
+        lead_list = [
+            {
+                "id": lead.id,
+                "emp_id": lead.emp_id,
+                "emp_name": lead.employee.name if lead.employee else "Unknown",
+                "name": lead.name,
+                "lead_cat": lead.lead_cat,
+                "email": lead.email,
+                "mob_no": lead.mob_no,
+                "lead_source": lead.source_rel.source_name if lead.source_rel else None,
+                "status": lead.status_rel.status_name if lead.status_rel else None,
+                "lead_source_id": lead.lead_source_id,
+                "status_id": lead.status_id,
+                "remarks": lead.remarks,
+                "created_at": lead.created_at.strftime('%Y-%m-%d %H:%M:%S') if lead.created_at else None,
+                "follow_up_date": lead.follow_up_date.strftime('%Y-%m-%d %H:%M:%S') if lead.follow_up_date else None
             }
             for lead in leads
         ]
@@ -151,21 +194,63 @@ def update_lead_service(lead_id, data, current_emp_id):
         if not lead:
             return {"error": "Lead not found"}, 404
 
-        old_status = lead.status
-        new_status = data.get('status')
+        old_status = lead.status_rel.status_name if lead.status_rel else None
+        new_status_id = data.get('status_id')
+        new_source_id = data.get('lead_source_id')
 
         # Update fields
         lead.name = data.get('name', lead.name)
         lead.lead_cat = data.get('lead_cat', lead.lead_cat)
         lead.email = data.get('email', lead.email)
         lead.mob_no = data.get('mob_no', lead.mob_no)
-        lead.lead_source = data.get('lead_source', lead.lead_source)
-        lead.status = new_status if new_status else lead.status
+        lead.lead_source_id = new_source_id if new_source_id is not None else lead.lead_source_id
+        lead.status_id = new_status_id if new_status_id is not None else lead.status_id
         lead.remarks = data.get('remarks', lead.remarks)
         lead.follow_up_date = data.get('follow_up_date', lead.follow_up_date)
 
         # Log status change if applicable
-        if new_status and old_status != new_status:
+        if new_status_id and lead.status_id == new_status_id:
+            new_status_obj = LeadStatus.query.get(new_status_id)
+            new_status_name = new_status_obj.status_name if new_status_obj else "Unknown"
+            
+            if old_status != new_status_name:
+                log_lead_activity(
+                    lead_id, 
+                    current_emp_id, 
+                    'Status Change', 
+                    f'Status updated from {old_status} to {new_status_name}', 
+                    old_status, 
+                    new_status_name
+                )
+        
+        # Log other updates if needed (e.g., Note Added)
+        elif data.get('remarks') and data.get('remarks') != lead.remarks:
+             log_lead_activity(lead_id, current_emp_id, 'Note Added', 'Remarks updated.')
+
+        db.session.commit()
+        return {"message": "Lead updated successfully"}, 200
+
+    except Exception as e:
+        db.session.rollback()
+        return {"error": str(e)}, 500
+
+def update_lead_status_service(lead_id, status_id, current_emp_id):
+    """Specialized service only for updating lead status."""
+    try:
+        lead = Lead.query.get(lead_id)
+        if not lead:
+            return {"error": "Lead not found"}, 404
+
+        old_status = lead.status_rel.status_name if lead.status_rel else None
+        status_obj = LeadStatus.query.get(status_id)
+        if not status_obj:
+            return {"error": "Invalid status ID"}, 400
+
+        new_status = status_obj.status_name
+        
+        lead.status_id = status_id
+
+        if old_status != new_status:
             log_lead_activity(
                 lead_id, 
                 current_emp_id, 
@@ -174,13 +259,10 @@ def update_lead_service(lead_id, data, current_emp_id):
                 old_status, 
                 new_status
             )
+            db.session.commit()
+            return {"message": "Status updated successfully"}, 200
         
-        # Log other updates if needed (e.g., Note Added)
-        elif data.get('remarks') and data.get('remarks') != lead.remarks:
-             log_lead_activity(lead_id, current_emp_id, 'Note Added', 'Remarks updated.')
-
-        db.session.commit()
-        return {"message": "Lead updated successfully"}, 200
+        return {"message": "No status change detected"}, 200
 
     except Exception as e:
         db.session.rollback()
@@ -225,5 +307,21 @@ def get_lead_activities_service(lead_id):
             }
             for act in activities
         ], 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+def get_lead_statuses():
+    """Fetches all active lead statuses."""
+    try:
+        statuses = LeadStatus.query.filter_by(is_active=True).all()
+        return [status.to_dict() for status in statuses], 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+def get_lead_sources():
+    """Fetches all active lead sources."""
+    try:
+        sources = LeadSource.query.filter_by(is_active=True).all()
+        return [source.to_dict() for source in sources], 200
     except Exception as e:
         return {"error": str(e)}, 500

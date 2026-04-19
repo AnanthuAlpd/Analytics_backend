@@ -12,6 +12,7 @@ class Employee(db.Model):
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
     parent_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, server_default=db.func.current_timestamp())
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False)
 
     # Relationships
     department = db.relationship("Department", back_populates="employees")

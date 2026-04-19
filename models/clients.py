@@ -21,6 +21,8 @@ class Client(db.Model):
         default=datetime.utcnow,
         onupdate=datetime.utcnow
     )
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False)
+    
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
     role = db.relationship('Role', backref='clients') 
     service = db.relationship('Service', backref='clients')

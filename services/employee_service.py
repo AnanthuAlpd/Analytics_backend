@@ -3,11 +3,12 @@ from werkzeug.security import generate_password_hash
 from models.employee import Employee
 from models.employee_departments import EmployeeDepartments
 from models.employee_roles import EmployeeRole
+from models.roles import Role
 from db import db
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError, DataError
 
 def get_all_employees():
-    employees = Employee.query.options(
+    employees = Employee.query.filter_by(is_deleted=False).options(
         db.joinedload(Employee.department),
         db.joinedload(Employee.roles)
     ).all()
@@ -29,7 +30,7 @@ def get_all_employees():
 
 
 def get_all_employees1():
-    employees = Employee.query.all()
+    employees = Employee.query.filter_by(is_deleted=False).all()
 
     result = [
         {
@@ -47,6 +48,12 @@ def get_all_employees1():
     return result
 
 def add_employee(data):
+    # Comprehensive Field Validation
+    required_fields = ['name', 'email', 'password', 'department_id']
+    for field in required_fields:
+        if not data.get(field):
+            return False, f"Missing required field: {field}"
+
     try:
         parent_id_value = data.get('parent_id')
         if parent_id_value == '':
@@ -56,7 +63,7 @@ def add_employee(data):
         new_employee = Employee(
             name=data['name'],
             email=data['email'],
-            mob_no=data['mob_no'],
+            mob_no=data.get('mob_no'),
             parent_id=parent_id_value,
             department_id=data['department_id'],
             password=hashed_password
@@ -70,11 +77,35 @@ def add_employee(data):
             department_id=data['department_id']
         )
         db.session.add(department_link)
+
+        # Assign default 'Employee' role
+        employee_role = Role.query.filter_by(name='Employee').first()
+        if employee_role:
+            db.session.add(EmployeeRole(employee_id=new_employee.id, role_id=employee_role.id))
+        
         db.session.commit()
         return True, new_employee.to_dict()
+
+    except IntegrityError as e:
+        db.session.rollback()
+        err_msg = str(e.orig).lower() if hasattr(e, 'orig') else str(e).lower()
+        if 'email' in err_msg:
+            return False, "Email already exists"
+        if 'name' in err_msg:
+            return False, "Employee name already exists"
+        return False, "Data integrity error (possible duplicate or invalid reference)"
+    
+    except DataError as e:
+        db.session.rollback()
+        return False, "Invalid data format or value too long"
+
     except SQLAlchemyError as e:
         db.session.rollback()
-        return False, str(e)
+        return False, f"Database error: {str(e)}"
+
+    except Exception as e:
+        db.session.rollback()
+        return False, f"Unexpected error: {str(e)}"
     
 def authenticate(email, password):
     employee = Employee.query.filter_by(email=email).first()
@@ -109,6 +140,20 @@ def update_employee_by_id(employee_id, data):
 
         db.session.commit()
         return {'message': 'Employee updated successfully'}, 200
+
+    except Exception as e:
+        db.session.rollback()
+        return {'error': str(e)}, 500
+
+def delete_employee_by_id(employee_id):
+    employee = Employee.query.get(employee_id)
+    if not employee or employee.is_deleted:
+        return {'error': 'Employee not found'}, 404
+
+    try:
+        employee.is_deleted = True
+        db.session.commit()
+        return {'message': 'Employee deleted successfully'}, 200
 
     except Exception as e:
         db.session.rollback()

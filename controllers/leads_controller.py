@@ -5,7 +5,11 @@ from services.leads_service import (
     get_all_leads_service,
     update_lead_service,
     add_lead_note_service,
-    get_lead_activities_service
+    get_lead_activities_service,
+    get_lead_statuses,
+    get_lead_sources,
+    update_lead_status_service,
+    get_follow_up_leads_service
 )
 from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from services.base_service import BaseService
@@ -74,5 +78,55 @@ def get_all_leads():
             return BaseService.create_response(message="User not found", status="error", code=404)
         data = get_all_leads_service()
         return BaseService.create_response(data=data, message="All leads fetched successfully")
+    except Exception as e:
+        return BaseService.create_response(message=str(e), status="error", code=500)
+
+@leads_bp.route('/leads/statuses', methods=['GET'])
+@jwt_required()
+def get_statuses():
+    result, status_code = get_lead_statuses()
+    return jsonify(result), status_code
+
+@leads_bp.route('/leads/sources', methods=['GET'])
+@jwt_required()
+def get_sources():
+    result, status_code = get_lead_sources()
+    return jsonify(result), status_code
+
+@leads_bp.route('/leads/update-status/<int:id>', methods=['PATCH', 'PUT'])
+@jwt_required()
+def update_lead_status(id):
+    data = request.json
+    current_emp_id = get_jwt_identity()
+    status_id = data.get('status_id')
+    
+    if not status_id:
+        return jsonify({"error": "status_id is required"}), 400
+        
+    result, status_code = update_lead_status_service(id, status_id, current_emp_id)
+    return jsonify(result), status_code
+
+@leads_bp.route('/leads/follow-ups', methods=['GET'])
+@jwt_required()
+def get_follow_up_leads():
+    try:
+        # Get emp_id to filter leads specifically for the logged-in employee 
+        emp_id = get_jwt_identity()
+        data = get_follow_up_leads_service(emp_id=emp_id)
+        return BaseService.create_response(data=data, message="Follow-up leads fetched successfully")
+    except Exception as e:
+        return BaseService.create_response(message=str(e), status="error", code=500)
+
+@leads_bp.route('/leads/follow-ups/all', methods=['GET'])
+@jwt_required()
+def get_all_follow_up_leads():
+    try:
+        # Check permissions similarly to get_all_leads
+        claims = get_jwt()
+        if claims.get("user_type") != "EMPLOYEE":
+            return BaseService.create_response(message="Access denied.", status="error", code=403)
+            
+        data = get_follow_up_leads_service(emp_id=None)
+        return BaseService.create_response(data=data, message="All follow-up leads fetched successfully")
     except Exception as e:
         return BaseService.create_response(message=str(e), status="error", code=500)

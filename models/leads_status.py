@@ -1,7 +1,7 @@
 from db import db
 
-class LeadStatus(db.Model):
-    __tablename__ = 'lead_status'
+class LeadsStatus(db.Model):
+    __tablename__ = 'leads_status'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     status_name = db.Column(db.String(50), nullable=False, unique=True)

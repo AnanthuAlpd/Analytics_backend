@@ -2,9 +2,12 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, extract
 from db import db
 from models.leads import Lead
-from models.lead_activity_logs import LeadActivityLog
-from models.lead_status import LeadStatus
-from models.lead_source import LeadSource
+from models.leads_activity_logs import LeadsActivityLog
+from models.leads_status import LeadsStatus
+from models.leads_sources import LeadsSource
+from models.leads_stage import LeadsStage
+from models.leads_stage_actions import LeadsStageAction
+from models.leads_activity_type import LeadsActivityType
 
 def create_lead(data, emp_id):
     try:
@@ -24,11 +27,22 @@ def create_lead(data, emp_id):
             status_id=data.get('status_id'),
             remarks=data.get('remarks')
         )
+        
+        # New Pipeline Logic Integration for Employee Category
+        if lead.lead_cat == 'Employee':
+            stage = LeadsStage.query.filter_by(order_no=1).first()
+            if stage:
+                lead.stage_id = stage.id
+                lead.follow_up_date = datetime.now() + timedelta(days=stage.delay_days)
+                
         db.session.add(lead)
         db.session.commit()
         
         # Log activity
-        log_lead_activity(lead.id, emp_id, 'Lead Created', 'Lead was successfully added.')
+        if lead.lead_cat == 'Employee':
+            log_lead_activity(lead.id, emp_id, 'Lead Created', 'Lead was successfully added and Employee Pipeline initialized.')
+        else:
+            log_lead_activity(lead.id, emp_id, 'Lead Created', 'Lead was successfully added.')
         
         return {"message": "Lead created successfully", "lead_id": lead.id}, 201
 
@@ -80,8 +94,8 @@ def get_leads_dashboard_stats(emp_id=None):
                 Lead.mob_no,
                 Lead.created_at,
                 Lead.lead_cat,
-                LeadStatus.status_name
-            ).join(LeadStatus, Lead.status_id == LeadStatus.id, isouter=True).filter(Lead.emp_id == emp_id).all()
+                LeadsStatus.status_name
+            ).join(LeadsStatus, Lead.status_id == LeadsStatus.id, isouter=True).filter(Lead.emp_id == emp_id).all()
 
             # Convert to list of dicts
             emp_leads = [
@@ -128,6 +142,8 @@ def get_all_leads_service():
                 "status": lead.status_rel.status_name if lead.status_rel else None,
                 "lead_source_id": lead.lead_source_id,
                 "status_id": lead.status_id,
+                "stage_id": lead.stage_id,
+                "stage_name": lead.stage.stage_name if lead.stage else "Unknown",
                 "remarks": lead.remarks,
                 "created_at": lead.created_at
             }
@@ -140,7 +156,7 @@ def get_all_leads_service():
 def get_follow_up_leads_service(emp_id=None):
     """Fetches all leads that currently have 'Follow-Up' status."""
     try:
-        query = db.session.query(Lead).join(LeadStatus).filter(LeadStatus.status_name == 'Follow-Up')
+        query = db.session.query(Lead).join(LeadsStatus).filter(LeadsStatus.status_name == 'Follow-Up')
         
         # Optional filter by employee if required
         if emp_id:
@@ -160,6 +176,8 @@ def get_follow_up_leads_service(emp_id=None):
                 "status": lead.status_rel.status_name if lead.status_rel else None,
                 "lead_source_id": lead.lead_source_id,
                 "status_id": lead.status_id,
+                "stage_id": lead.stage_id,
+                "stage_name": lead.stage.stage_name if lead.stage else "Unknown",
                 "remarks": lead.remarks,
                 "created_at": lead.created_at.strftime('%Y-%m-%d %H:%M:%S') if lead.created_at else None,
                 "follow_up_date": lead.follow_up_date.strftime('%Y-%m-%d %H:%M:%S') if lead.follow_up_date else None
@@ -173,10 +191,14 @@ def get_follow_up_leads_service(emp_id=None):
 def log_lead_activity(lead_id, emp_id, action_type, details, old_val=None, new_val=None):
     """Utility to log lead activities."""
     try:
-        log = LeadActivityLog(
+        activity_record = LeadsActivityType.query.filter_by(name=action_type).first()
+        activity_type_id = activity_record.id if activity_record else None
+
+        log = LeadsActivityLog(
             lead_id=lead_id,
             emp_id=emp_id,
             action_type=action_type,
+            activity_type_id=activity_type_id,
             details=details,
             old_value=old_val,
             new_value=new_val
@@ -210,7 +232,7 @@ def update_lead_service(lead_id, data, current_emp_id):
 
         # Log status change if applicable
         if new_status_id and lead.status_id == new_status_id:
-            new_status_obj = LeadStatus.query.get(new_status_id)
+            new_status_obj = LeadsStatus.query.get(new_status_id)
             new_status_name = new_status_obj.status_name if new_status_obj else "Unknown"
             
             if old_status != new_status_name:
@@ -242,7 +264,7 @@ def update_lead_status_service(lead_id, status_id, current_emp_id):
             return {"error": "Lead not found"}, 404
 
         old_status = lead.status_rel.status_name if lead.status_rel else None
-        status_obj = LeadStatus.query.get(status_id)
+        status_obj = LeadsStatus.query.get(status_id)
         if not status_obj:
             return {"error": "Invalid status ID"}, 400
 
@@ -268,14 +290,14 @@ def update_lead_status_service(lead_id, status_id, current_emp_id):
         db.session.rollback()
         return {"error": str(e)}, 500
 
-def add_lead_note_service(lead_id, emp_id, details):
-    """Records a manual note and syncs it with the lead's main remarks."""
+def add_lead_note_service(lead_id, emp_id, details, activity_type_name="Note Added"):
+    """Records a structured manual activity note and syncs basic remarks."""
     try:
         # 1. Record the note in activities
         log_lead_activity(
             lead_id=lead_id,
             emp_id=emp_id,
-            action_type='Note Added',
+            action_type=activity_type_name,
             details=details
         )
 
@@ -294,7 +316,7 @@ def add_lead_note_service(lead_id, emp_id, details):
 def get_lead_activities_service(lead_id):
     """Fetches activity timeline for a lead."""
     try:
-        activities = LeadActivityLog.query.filter_by(lead_id=lead_id).order_by(LeadActivityLog.created_at.desc()).all()
+        activities = LeadsActivityLog.query.filter_by(lead_id=lead_id).order_by(LeadsActivityLog.created_at.desc()).all()
         return [
             {
                 "id": act.id,
@@ -313,7 +335,7 @@ def get_lead_activities_service(lead_id):
 def get_lead_statuses():
     """Fetches all active lead statuses."""
     try:
-        statuses = LeadStatus.query.filter_by(is_active=True).all()
+        statuses = LeadsStatus.query.filter_by(is_active=True).all()
         return [status.to_dict() for status in statuses], 200
     except Exception as e:
         return {"error": str(e)}, 500
@@ -321,7 +343,59 @@ def get_lead_statuses():
 def get_lead_sources():
     """Fetches all active lead sources."""
     try:
-        sources = LeadSource.query.filter_by(is_active=True).all()
+        sources = LeadsSource.query.filter_by(is_active=True).all()
         return [source.to_dict() for source in sources], 200
     except Exception as e:
         return {"error": str(e)}, 500
+
+def get_activity_types_service():
+    """Fetches structured activity types."""
+    try:
+        types = LeadsActivityType.query.all()
+        return [{"id": t.id, "name": t.name} for t in types], 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+def get_pipeline_stages_service():
+    """Fetches static pipeline stage configurations."""
+    try:
+        stages = LeadsStage.query.filter_by(is_active=True).order_by(LeadsStage.order_no).all()
+        return [stage.to_dict() for stage in stages], 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+def advance_lead_stage_service(lead_id, stage_id, current_emp_id):
+    try:
+        lead = Lead.query.get(lead_id)
+        if not lead:
+            return {"error": "Lead not found"}, 404
+
+        stage = LeadsStage.query.get(stage_id)
+        if not stage:
+            return {"error": "Invalid stage ID"}, 400
+
+        old_stage = lead.stage.stage_name if lead.stage else "Unknown"
+        lead.stage_id = stage_id
+        
+        # Auto-calculate follow_up_date
+        lead.follow_up_date = datetime.now() + timedelta(days=stage.delay_days)
+
+        log_lead_activity(
+            lead_id, 
+            current_emp_id, 
+            'Stage Progressed', 
+            f'Stage advanced from {old_stage} to {stage.stage_name}. Next action due in {stage.delay_days} days.', 
+            old_stage, 
+            stage.stage_name
+        )
+        
+        db.session.commit()
+        return {
+            "message": "Stage advanced successfully", 
+            "follow_up_date": lead.follow_up_date.strftime('%Y-%m-%d %H:%M:%S'),
+            "stage_name": stage.stage_name
+        }, 200
+
+    except Exception as e:
+        db.session.rollback()
+        return {"error": str(e)}, 500

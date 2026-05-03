@@ -9,7 +9,10 @@ from services.leads_service import (
     get_lead_statuses,
     get_lead_sources,
     update_lead_status_service,
-    get_follow_up_leads_service
+    get_follow_up_leads_service,
+    get_pipeline_stages_service,
+    advance_lead_stage_service,
+    get_activity_types_service
 )
 from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from services.base_service import BaseService
@@ -32,13 +35,14 @@ def add_note():
     current_emp_id = get_jwt_identity()
     
     # Validate input
-    if not data.get('lead_id') or not data.get('details'):
-        return jsonify({"error": "lead_id and details are required"}), 400
+    if not data.get('lead_id'):
+        return jsonify({"error": "lead_id is required"}), 400
         
     result, status_code = add_lead_note_service(
         lead_id=data['lead_id'],
         emp_id=current_emp_id,
-        details=data['details']
+        details=data.get('details', 'No remarks provided.'),
+        activity_type_name=data.get('activity_type_name', 'Note Added')
     )
     return jsonify(result), status_code
 
@@ -130,3 +134,28 @@ def get_all_follow_up_leads():
         return BaseService.create_response(data=data, message="All follow-up leads fetched successfully")
     except Exception as e:
         return BaseService.create_response(message=str(e), status="error", code=500)
+
+@leads_bp.route('/leads/pipeline-stages', methods=['GET'])
+@jwt_required()
+def get_pipeline_stages():
+    result, status_code = get_pipeline_stages_service()
+    return jsonify(result), status_code
+
+@leads_bp.route('/leads/<int:id>/advance-stage', methods=['PATCH', 'PUT'])
+@jwt_required()
+def advance_lead_stage(id):
+    data = request.json
+    current_emp_id = get_jwt_identity()
+    stage_id = data.get('stage_id')
+    
+    if not stage_id:
+        return jsonify({"error": "stage_id is required"}), 400
+        
+    result, status_code = advance_lead_stage_service(id, stage_id, current_emp_id)
+    return jsonify(result), status_code
+
+@leads_bp.route('/leads/activity-types', methods=['GET'])
+@jwt_required()
+def get_activity_types():
+    result, status_code = get_activity_types_service()
+    return jsonify(result), status_code

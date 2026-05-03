@@ -1,8 +1,9 @@
 from datetime import datetime
 from db import db
 from models.employee import Employee 
-from models.lead_status import LeadStatus
-from models.lead_source import LeadSource
+from models.leads_status import LeadsStatus
+from models.leads_sources import LeadsSource
+from models.leads_stage import LeadsStage
 
 class Lead(db.Model):
     __tablename__ = 'leads'
@@ -18,10 +19,12 @@ class Lead(db.Model):
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
-    status_id = db.Column(db.Integer, db.ForeignKey('lead_status.id'), nullable=True)
-    lead_source_id = db.Column(db.Integer, db.ForeignKey('lead_sources.id'), nullable=True)
+    status_id = db.Column(db.Integer, db.ForeignKey('leads_status.id'), nullable=True)
+    lead_source_id = db.Column(db.Integer, db.ForeignKey('leads_sources.id'), nullable=True)
+    stage_id = db.Column(db.Integer, db.ForeignKey('leads_stage.id'), default=1, nullable=True)
 
     # Optional relationship if you want backref to Employee model
     employee = db.relationship('Employee', backref='leads')
-    status_rel = db.relationship('LeadStatus', backref='leads')
-    source_rel = db.relationship('LeadSource', backref='leads')
+    status_rel = db.relationship('LeadsStatus', backref='leads')
+    source_rel = db.relationship('LeadsSource', backref='leads')
+    stage = db.relationship('LeadsStage', backref='leads')

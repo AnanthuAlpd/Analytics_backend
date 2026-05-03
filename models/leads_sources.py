@@ -1,7 +1,7 @@
 from db import db
 
-class LeadSource(db.Model):
-    __tablename__ = 'lead_sources'
+class LeadsSource(db.Model):
+    __tablename__ = 'leads_sources'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     source_name = db.Column(db.String(50), nullable=False, unique=True)

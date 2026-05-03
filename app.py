@@ -36,12 +36,12 @@ def create_app():
 
     # Background tasks
     from flask_apscheduler import APScheduler
-    from tasks import check_and_update_overdue_leads
+    from lead_notification_task import check_and_update_overdue_leads
     scheduler = APScheduler()
     scheduler.init_app(app)
     
-    # Run the lead update script automatically every night at midnight (production-ready)
-    @scheduler.task('cron', id='update_overdue_leads_daily', hour=0, minute=0)
+    # Run the lead update script automatically every hour
+    @scheduler.task('interval', id='update_overdue_leads_hourly', hours=1)
     def run_lead_updater():
         check_and_update_overdue_leads(app)
         

@@ -79,7 +79,7 @@ def add_employee(data):
         db.session.add(department_link)
 
         # Assign default 'Employee' role
-        employee_role = Role.query.filter_by(name='Employee').first()
+        employee_role = Role.query.filter_by(name='Hero').first()
         if employee_role:
             db.session.add(EmployeeRole(employee_id=new_employee.id, role_id=employee_role.id))
         

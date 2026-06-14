@@ -4,6 +4,7 @@ from flask_cors import CORS
 from db import init_db
 from flask_jwt_extended import JWTManager
 from werkzeug.middleware.proxy_fix import ProxyFix
+from mangum import Mangum
 
 
 # Import controllers
@@ -127,9 +128,9 @@ def create_app():
             status="error",
             code=code
         )
+    handler = Mangum(app) 
 
     @app.route('/')
     def home():
         return render_template('index.html')
-
     return app
